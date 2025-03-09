@@ -59,8 +59,8 @@ const professors = [
 async function seedProfessors() {
     for (const prof of professors) {
         const [firstName, lastName] = prof.name.split(' ');
-        const username = `${firstName.toLowerCase()}${prof.department.toLowerCase()}`;
-        const email = `${firstName.toLowerCase()}${lastName[0].toLowerCase()}@iitp.ac.in`;
+        const username = `${firstName.toLowerCase()}_${prof.department.toLowerCase()}`;
+        const email = `${firstName.toLowerCase()}_${prof.department.toLowerCase()}@iitp.ac.in`;
 
         await prisma.user.create({
             data: {
@@ -80,7 +80,7 @@ const admins = [{ name: 'Alok Sharma' }, { name: 'Divya Patel' }, { name: 'Ravi 
 async function seedAdmins() {
     for (const admin of admins) {
         const [firstName, lastName] = admin.name.split(' ');
-        const username = `${firstName.toLowerCase()}admin`;
+        const username = `${firstName.toLowerCase()}_admin`;
         const email = `${firstName.toLowerCase()}_admin@iitp.ac.in`;
 
         await prisma.user.create({
@@ -97,20 +97,33 @@ async function seedAdmins() {
 }
 
 async function generateProjects() {
-    const professors = await prisma.user.findMany({
+    const professorsList = await prisma.user.findMany({
         where: { role: 'PROFESSOR' },
     });
 
-    if (professors.length === 0) {
+    if (professorsList.length === 0) {
         console.log('No professors found. Skipping project generation.');
         return;
     }
 
-    const difficulties = ['Easy', 'Medium', 'Hard'];
-    const tags = ['AI', 'ML', 'WebDev', 'IoT', 'Blockchain', 'Design', 'DataScience'];
+    const difficulties = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
+    const tags = [
+        'AI',
+        'ML',
+        'WebDev',
+        'IoT',
+        'Blockchain',
+        'Design',
+        'DataScience',
+        'Cybersecurity',
+        'Networking',
+        'Robotics',
+        'Embedded',
+        'MobileDev',
+    ];
 
     for (let i = 1; i <= 10; i++) {
-        const author = professors[Math.floor(Math.random() * professors.length)];
+        const author = professorsList[Math.floor(Math.random() * professorsList.length)];
 
         await prisma.project.create({
             data: {
@@ -118,13 +131,22 @@ async function generateProjects() {
                 subheading: `Subheading for Project ${i}`,
                 description: `This is a sample description for Project ${i}.`,
                 difficultyTag: difficulties[Math.floor(Math.random() * difficulties.length)],
+                // requirementTags: tags,
                 requirementTags: [
-                    tags[Math.floor(Math.random() * tags.length)],
-                    tags[Math.floor(Math.random() * tags.length)],
+                    tags[Math.floor(Math.random() * tags.length)].toString(),
+                    tags[Math.floor(Math.random() * tags.length)].toString(),
                 ],
                 projectResources: [
-                    { type: 'link', name: 'GitHub Repo', url: 'https://github.com/example/project' },
-                    { type: 'doc', name: 'Overview Document', url: 'https://example.com/overview.pdf' },
+                    {
+                        type: 'link',
+                        name: 'GitHub Repo',
+                        url: 'https://github.com/example/project',
+                    },
+                    {
+                        type: 'doc',
+                        name: 'Overview Document',
+                        url: 'https://example.com/overview.pdf',
+                    },
                 ],
                 deadlineToApply: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // 7 days from now
                 deadlineToComplete: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days from now
@@ -140,16 +162,16 @@ async function main() {
     await add_students()
         .then(() => console.log('Students seeded successfully!'))
         .catch((e) => console.error(e));
-    // await seedProfessors()
-    //     .then(() => console.log('Professors seeded successfully!'))
-    //     .catch((e) => console.error(e));
-    // await seedAdmins()
-    //     .then(() => console.log('Admins seeded successfully!'))
-    //     .catch((e) => console.error(e));
+    await seedProfessors()
+        .then(() => console.log('Professors seeded successfully!'))
+        .catch((e) => console.error(e));
+    await seedAdmins()
+        .then(() => console.log('Admins seeded successfully!'))
+        .catch((e) => console.error(e));
 
-    // await generateProjects()
-    //     .then(() => console.log('Projects seeded successfully!'))
-    //     .catch((e) => console.error(e));
+    await generateProjects()
+        .then(() => console.log('Projects seeded successfully!'))
+        .catch((e) => console.error(e));
 }
 
 main()

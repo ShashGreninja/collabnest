@@ -6,61 +6,74 @@ generator client {
 datasource db {
     provider = "postgresql"
     url      = env("DATABASE_URL")
-    //extensions = [pgcrypto] //No need to add this line 
 }
 
 model User {
-    id                       String    @id @default(uuid()) @db.Uuid
-    username                 String    @unique
+    id                       String          @id @default(uuid()) @db.Uuid
+    username                 String          @unique
     name                     String
-    roll                     String?   @unique
-    email                    String    @unique
+    roll                     String?         @unique
+    email                    String          @unique
     password                 String
-    role                     Role      @default(USER)
-    rating                   Int       @default(0)
+    role                     Role            @default(USER)
+    rating                   Int             @default(0)
     degree                   String?
     year                     String?
     branch                   String?
     department               String
     picture                  String?
-    accountCreatedAt         DateTime  @default(now())
+    accountCreatedAt         DateTime        @default(now())
     passwordChangedAt        DateTime?
     passwordResetToken       String?
     passwordResetTokenExpiry DateTime?
+    applications             Application[]
+    projectCreated           Project[]       @relation("ProjectAuthor")
+    projectsParticipated     ProjectMember[]
+}
 
-    // relations
-    applications         Application[]
-    projectCreated       Project[]       @relation("ProjectAuthor")
-    projectsParticipated ProjectMember[]
+model Project {
+    id                 String          @id @default(uuid()) @db.Uuid
+    authorId           String          @db.Uuid
+    title              String
+    subheading         String?
+    description        String?
+    status             Status          @default(OPEN)
+    deadlineToApply    DateTime?
+    deadlineToComplete DateTime?
+    difficultyTag      DifficultyTag
+    applicantCapacity  Int             @default(100)
+    selectionCapacity  Int             @default(10)
+    requirementTags    String[]
+    projectResources   Json[]
+    createdAt          DateTime        @default(now())
+    updatedAt          DateTime        @updatedAt
+    applications       Application[]
+    author             User            @relation("ProjectAuthor", fields: [authorId], references: [id])
+    members            ProjectMember[]
+}
+
+model Application {
+    id                String            @id @default(uuid()) @db.Uuid
+    projectId         String            @db.Uuid
+    applicantId       String            @db.Uuid
+    dateOfApplication DateTime          @default(now())
+    status            ApplicationStatus @default(PENDING)
+    applicant         User              @relation(fields: [applicantId], references: [id])
+    project           Project           @relation(fields: [projectId], references: [id])
+}
+
+model ProjectMember {
+    id        String  @id @default(uuid()) @db.Uuid
+    projectId String  @db.Uuid
+    userId    String  @db.Uuid
+    project   Project @relation(fields: [projectId], references: [id])
+    user      User    @relation(fields: [userId], references: [id])
 }
 
 enum Role {
     USER
     PROFESSOR
     ADMIN
-}
-
-model Project {
-    id                 String        @id @default(uuid()) @db.Uuid
-    authorId           String        @db.Uuid
-    title              String
-    subheading         String?
-    description        String?
-    status             Status        @default(OPEN)
-    deadlineToApply    DateTime?
-    deadlineToComplete DateTime?
-    difficultyTag      DifficultyTag
-    requirementTags    Json[]
-    applicantCapacity  Int           @default(100)
-    selectionCapacity  Int           @default(10)
-    projectResources   Json[]
-    createdAt          DateTime      @default(now())
-    updatedAt          DateTime      @updatedAt
-
-    // relations
-    applications Application[]
-    members      ProjectMember[]
-    author       User            @relation("ProjectAuthor", fields: [authorId], references: [id])
 }
 
 enum Status {
@@ -74,30 +87,8 @@ enum DifficultyTag {
     ADVANCED
 }
 
-model Application {
-    id                String            @id @default(uuid()) @db.Uuid
-    projectId         String            @db.Uuid
-    applicantId       String            @db.Uuid
-    dateOfApplication DateTime          @default(now())
-    status            ApplicationStatus @default(PENDING)
-
-    // relations
-    project   Project @relation(fields: [projectId], references: [id])
-    applicant User    @relation(fields: [applicantId], references: [id])
-}
-
 enum ApplicationStatus {
     PENDING
     ACCEPTED
     REJECTED
-}
-
-model ProjectMember {
-    id        String @id @default(uuid()) @db.Uuid
-    projectId String @db.Uuid
-    userId    String @db.Uuid
-
-    // relations
-    project Project @relation(fields: [projectId], references: [id])
-    user    User    @relation(fields: [userId], references: [id])
 }
