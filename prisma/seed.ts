@@ -76,12 +76,7 @@ async function seedProfessors() {
     }
 }
 
-const admins = [
-    { name: 'Alok Sharma' },
-    { name: 'Divya Patel' },
-    { name: 'Ravi Kumar' },
-    { name: 'Sneha Nair' },
-];
+const admins = [{ name: 'Alok Sharma' }, { name: 'Divya Patel' }, { name: 'Ravi Kumar' }, { name: 'Sneha Nair' }];
 
 async function seedAdmins() {
     for (const admin of admins) {
@@ -326,34 +321,110 @@ async function goThrough() {
 }
 
 async function main() {
-    await add_students()
-        .then(() => console.log('Students seeded successfully!'))
-        .catch((e) => console.error(e));
-    await seedProfessors()
-        .then(() => console.log('Professors seeded successfully!'))
-        .catch((e) => console.error(e));
-    await seedAdmins()
-        .then(() => console.log('Admins seeded successfully!'))
-        .catch((e) => console.error(e));
+    // await add_students()
+    //     .then(() => console.log('Students seeded successfully!'))
+    //     .catch((e) => console.error(e));
+    // await seedProfessors()
+    //     .then(() => console.log('Professors seeded successfully!'))
+    //     .catch((e) => console.error(e));
+    // await seedAdmins()
+    //     .then(() => console.log('Admins seeded successfully!'))
+    //     .catch((e) => console.error(e));
 
-    await generateProjects()
-        .then(() => console.log('Projects seeded successfully!'))
-        .catch((e) => console.error(e));
-    await generateApplications()
-        .then(() => console.log('Applications seeded successfully!'))
-        .catch((e) => console.error(e));
+    // await generateProjects()
+    //     .then(() => console.log('Projects seeded successfully!'))
+    //     .catch((e) => console.error(e));
+    // await generateApplications()
+    //     .then(() => console.log('Applications seeded successfully!'))
+    //     .catch((e) => console.error(e));
 
-    await generateProjectMembers()
-        .then(() => console.log('Project members seeded successfully!'))
-        .catch((e) => console.error(e));
+    // await generateProjectMembers()
+    //     .then(() => console.log('Project members seeded successfully!'))
+    //     .catch((e) => console.error(e));
 
-    await generateMessages()
-        .then(() => console.log('Messages seeded successfully!'))
-        .catch((e) => console.error(e));
+    // await generateMessages()
+    //     .then(() => console.log('Messages seeded successfully!'))
+    //     .catch((e) => console.error(e));
 
     // await goThrough()
     //     .then(() => console.log('Applications goThrough seeded successfully!'))
     //     .catch((e) => console.error(e));
+
+    const projectName = 'Testing for author';
+    const Arpit = '0ce2d31f-8217-4a6e-89a9-126455571344';
+    const utsav = 'ffd0210e-92c9-47af-a04e-71be10bece84';
+    const userId = utsav;
+    const professorId1 = '249819c8-aa86-4387-91ac-64ed9994a0e7';
+    const mayank = '9e0a668f-4664-4ac3-abfb-e7781bd57785';
+    const professorId = mayank;
+
+    await prisma.project.create({
+        data: {
+            title: projectName,
+            authorId: professorId,
+            subheading: `Subheading for ${projectName}`,
+            description: `This is a sample description for ${projectName}.`,
+            difficultyTag: 'BEGINNER',
+            requirementTags: ['AI', 'ML'],
+            projectResources: [
+                {
+                    type: 'link',
+                    name: 'GitHub Repo',
+                    url: 'https://github.com/example/project',
+                },
+                {
+                    type: 'doc',
+                    name: 'Overview Document',
+                    url: 'https://example.com/overview.pdf',
+                },
+            ],
+            deadlineToApply: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // 7 days from now
+            deadlineToComplete: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days from now
+        },
+    });
+
+    // let projectId = '';
+
+    // await prisma.project
+    //     .findFirst({
+    //         where: { title: projectName },
+    //     })
+    //     .then((project) => {
+    //         if (project) {
+    //             projectId = project.id;
+    //         } else {
+    //             throw new Error(`Project with title ${projectName} not found`);
+    //         }
+    //     });
+
+    // await prisma.projectMember.create({
+    //     data: {
+    //         userId: userId,
+    //         projectId: projectId,
+    //     },
+    // });
+
+    // const existingApp = await prisma.application.findFirst({
+    //     where: {
+    //         applicantId: userId,
+    //         projectId: projectId,
+    //     },
+    // });
+
+    // if (existingApp) {
+    //     await prisma.application.update({
+    //         where: { id: existingApp.id },
+    //         data: { status: 'ACCEPTED' },
+    //     });
+    // } else {
+    //     await prisma.application.create({
+    //         data: {
+    //             applicantId: userId,
+    //             projectId: projectId,
+    //             status: 'ACCEPTED',
+    //         },
+    //     });
+    // }
 }
 
 main()
