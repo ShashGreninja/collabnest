@@ -6,7 +6,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import requests
 
 def fetch_ml_data():
-    url = "http://localhost:3000/api/fetchMLdata"
+    url = "http://host.docker.internal:3000/api/fetchMLdata"
     
     try:
         response = requests.get(url)
