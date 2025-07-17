@@ -208,7 +208,7 @@ export default function ChatWindowPage() {
           <ProjectDetailsModal
             isOpen={details1}
             onClose={() => setDetails1(false)}
-            proj={currentProject}
+            proj={currentProject!}
           />
         )}
       </div>

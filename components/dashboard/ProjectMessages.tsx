@@ -66,7 +66,7 @@ export function ProjectMessages() {
             </div>
           </div>
         ))} */}
-       
+
           <Image
             src='chat.svg'
             alt='No messages'
@@ -74,7 +74,7 @@ export function ProjectMessages() {
             height={60}
             className='mx-auto my-8'
           />
-        
+
         <Link
         href={`/dashboard/chat-window/${projectId}`}
         className="text-blue-600 underline mt-5"
