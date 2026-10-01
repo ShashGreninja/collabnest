@@ -25,6 +25,65 @@ declare module "next-auth/jwt" {
   }
 }
 
+// Same derivation as app/api/addUser/route.ts so first-login upsert
+// produces an identical row even if /welcome is skipped.
+function extractProgramCode(rollNumber: string) {
+  return rollNumber.substring(2, 4).toUpperCase();
+}
+
+function getProgramName(rollNumber: string): string {
+  const programs: Record<string, string> = {
+    '01': 'BTech',
+    '02': 'MTech',
+    '11': 'BSc',
+    '12': 'MSc',
+  };
+  const fourYear: string[] = ['CS', 'AI', 'EE', 'EC', 'MC', 'CB', 'CE', 'ME', 'MM', 'EP', 'CT'];
+  const programCode = extractProgramCode(rollNumber);
+  const branch = extractBranch(rollNumber);
+  if (programCode === '01' && !fourYear.includes(branch)) {
+    return 'Dual Degree 5 Years';
+  }
+  return programs[programCode] || 'Unknown Program';
+}
+
+function extractBranch(rollNumber: string) {
+  return rollNumber.substring(4, 6).toUpperCase();
+}
+
+function extractDepartment(branch: string) {
+  const branchToDepartment: Record<string, string> = {
+    CS: 'Computer Science and Engineering',
+    AI: 'Computer Science and Engineering',
+    EE: 'Electrical Engineering',
+    EC: 'Electrical Engineering',
+    VL: 'Electrical Engineering',
+    PC: 'Electrical Engineering',
+    CM: 'Electrical Engineering',
+    MC: 'Mathematics',
+    CB: 'Chemical Engineering',
+    CT: 'Chemical Engineering',
+    CE: 'Civil Engineering',
+    GT: 'Civil Engineering',
+    ST: 'Civil Engineering',
+    ME: 'Mechanical Engineering',
+    MM: 'Metallurgical and Materials Engineering',
+    EP: 'Engineering Physics',
+  };
+  return branchToDepartment[branch] || 'No Mapped Department';
+}
+
+function extractRollFromEmail(email: string) {
+  const userId = email.split('@')[0];
+  const isFirstPartInt = !isNaN(parseInt(userId[0]));
+  return isFirstPartInt ? userId.split('_')[0].toUpperCase() : userId.split('_')[1].toUpperCase();
+}
+
+function extractStartingYear(rollNumber: string) {
+  const yearPrefix = rollNumber.substring(0, 2);
+  return (2000 + parseInt(yearPrefix, 10)).toString();
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     AzureADProvider({
@@ -39,11 +98,37 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ account, profile }) {
-      if (profile?.email?.endsWith('@iitp.ac.in')) {
-        return true;
+    async signIn({ profile }) {
+      if (!profile?.email?.endsWith('@iitp.ac.in')) {
+        return false;
       }
-      return false;
+      // Ensure a DB row always exists on first login so callers never 404.
+      // /welcome still calls /api/addUser (idempotent) as a backup.
+      try {
+        const email = profile.email as string;
+        const existing = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true },
+        });
+        if (!existing) {
+          const roll = extractRollFromEmail(email);
+          const branch = extractBranch(roll);
+          await prisma.user.create({
+            data: {
+              name: (profile.name as string) || email.split('@')[0],
+              email,
+              roll,
+              branch,
+              degree: getProgramName(roll),
+              year: extractStartingYear(roll),
+              department: extractDepartment(branch),
+            },
+          });
+        }
+      } catch {
+        // Never block auth on DB failure — /api/addUser will retry from /welcome
+      }
+      return true;
     },
     async jwt({ token, profile }) {
       if (profile) {

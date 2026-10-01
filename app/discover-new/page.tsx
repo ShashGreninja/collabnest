@@ -119,15 +119,38 @@ const Discovery = () => {
           return;
         }
         console.log(userId);
-        const recRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/recommend/${userId}`);
-        const recData = await recRes.json();
-        const recommendedIds = recData.data || [];
-        console.log(recommendedIds);
-
-        // Fetch all projects
+        // Fetch all projects first (required)
         const projRes = await fetch("/api/projects/All_Project");
+        if (!projRes.ok) throw new Error(`All_Project ${projRes.status}`);
         const projData = await projRes.json();
-        setAllProjects(projData);
+        if (!Array.isArray(projData)) throw new Error("All_Project non-array");
+
+        // Recommend is optional — ML backend may be unset or down.
+        // Never let it throw JSON.parse on HTML; fall back to unranked list.
+        let recommendedIds: string[] = [];
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        if (backendUrl) {
+          try {
+            const recRes = await fetch(`${backendUrl}/recommend/${userId}`);
+            if (!recRes.ok) throw new Error(`recommend ${recRes.status}`);
+            const contentType = recRes.headers.get("content-type") ?? "";
+            if (!contentType.includes("application/json")) {
+              throw new Error("recommend non-JSON response");
+            }
+            const recData = await recRes.json();
+            if (Array.isArray(recData?.data)) recommendedIds = recData.data;
+          } catch (recErr) {
+            console.warn(
+              "Recommend unavailable, showing all projects:",
+              recErr
+            );
+          }
+        } else {
+          console.warn(
+            "NEXT_PUBLIC_BACKEND_URL unset, showing all projects without recommendations"
+          );
+        }
+        console.log(recommendedIds);
 
         // Separate top 3 recommended projects
         const topRecommended = projData.filter((project: Project) =>
@@ -159,7 +182,7 @@ const Discovery = () => {
     };
 
     fetchData();
-  }, [userId]);
+  }, [userId, role]);
 
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(
     null
@@ -334,7 +357,9 @@ const Discovery = () => {
       // setAllProjects(data); // Keep all projects updated
       // setProjects(data); // Update the filtered projects
       const projRes = await fetch("/api/projects/All_Project");
+      if (!projRes.ok) throw new Error(`All_Project ${projRes.status}`);
       const projData = await projRes.json();
+      if (!Array.isArray(projData)) throw new Error("All_Project non-array");
 
 
       // Separate top 3 recommended projects
