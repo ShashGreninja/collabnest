@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Edit, Settings } from "lucide-react";
-import { Loader } from "./Loader";
 
 export const ProfileHeader = ({ id }: { id: string }) => {
   const [userData, setUserData] = useState<any>(null);
@@ -32,8 +31,16 @@ export const ProfileHeader = ({ id }: { id: string }) => {
 
   if (loading)
     return (
-      <div className='flex items-center justify-center h-32'>
-        <Loader center text='Loading profile...' />
+      <div className='flex items-center justify-between mb-6' aria-busy='true' aria-label='Loading profile'>
+        <div className='flex items-center space-x-4 animate-pulse'>
+          <div className='h-20 w-20 rounded-full bg-muted' />
+          <div className='space-y-3'>
+            <div className='h-6 w-48 rounded bg-muted' />
+            <div className='h-4 w-24 rounded bg-muted' />
+            <div className='h-4 w-36 rounded bg-muted' />
+            <div className='h-4 w-56 rounded bg-muted' />
+          </div>
+        </div>
       </div>
     );
   if (error) return <p className='text-red-500'>{error}</p>;

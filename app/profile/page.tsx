@@ -9,7 +9,6 @@ import { UserDetails } from "@/components/profile/UserDetails";
 import { CVSection } from "@/components/profile/CVSection";
 import { useSession } from "next-auth/react";
 import { User } from "@/types/leaderboard";
-import { Loader } from "@/components/profile/Loader";
 import { useIsClient } from "../context/isClientContext";
 
 export default function ProfilePage() {
@@ -63,8 +62,19 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className='flex items-center justify-center h-40'>
-      <Loader center text='Loading statistics...' />
+    <div className='container mx-auto py-8 px-4 md:px-8 lg:max-w-320' aria-busy='true' aria-label='Loading profile'>
+      <div className='grid lg:grid-cols-3 gap-6 animate-pulse'>
+        <div className='lg:col-span-2 space-y-6'>
+          <div className='flex items-center gap-4'>
+            <div className='h-20 w-20 rounded-full bg-muted' />
+            <div className='space-y-3'><div className='h-6 w-48 rounded bg-muted' /><div className='h-4 w-36 rounded bg-muted' /><div className='h-4 w-56 rounded bg-muted' /></div>
+          </div>
+          <div className='grid grid-cols-2 md:grid-cols-3 gap-4'>{Array.from({ length: 6 }).map((_, index) => <div key={index} className='h-24 rounded-lg bg-muted' />)}</div>
+          <div className='h-64 rounded-lg bg-muted' />
+          <div className='h-64 rounded-lg bg-muted' />
+        </div>
+        <div className='space-y-6'><div className='h-64 rounded-lg bg-muted' /><div className='h-40 rounded-lg bg-muted' /><div className='h-48 rounded-lg bg-muted' /></div>
+      </div>
     </div>
   );
 }
