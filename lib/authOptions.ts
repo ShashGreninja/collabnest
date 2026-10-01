@@ -1,11 +1,27 @@
 import { NextAuthOptions } from "next-auth";
 import AzureADProvider from 'next-auth/providers/azure-ad';
+import { prisma } from "@/lib/prisma";
 
-
+// Extend the built-in session / token / profile types
 declare module "next-auth" {
-  /** The OAuth profile returned from your provider */
   interface Profile {
-    oid: string
+    oid: string;
+  }
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+    };
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    oid?: string;
+    dbId?: string;
+    role?: string;
   }
 }
 
@@ -30,44 +46,38 @@ export const authOptions: NextAuthOptions = {
       return false;
     },
     async jwt({ token, profile }) {
-      // Add user role to token
-      // This is where you'd determine the user's role
-      // You could check against a database, or use specific email patterns, etc.
-
       if (profile) {
-        // Example: determine role based on email or other profile data
-        // You'll need to implement your own logic here
-        // const email = profile.email || token.email;
-
-        // // Example role determination (customize based on your needs)
-        // if (email === 'admin@iitp.ac.in') {
-        //   token.role = 'admin';
-        // } else if (email?.includes('moderator')) {
-        //   token.role = 'moderator';
-        // } else {
-        //   token.role = 'user';
-        // }
-
-        // Preserve other profile information
         token.oid = profile.oid!;
         token.email = profile.email;
         token.name = profile.name;
-        // token.preferred_username = profile.preferred_username;
+      }
+
+      // On every token refresh, look up the database user to get id + role
+      if (token.email && !token.dbId) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: token.email as string },
+            select: { id: true, role: true },
+          });
+          if (dbUser) {
+            token.dbId = dbUser.id;
+            token.role = dbUser.role;
+          }
+        } catch {
+          // DB lookup failure should not block auth
+        }
       }
 
       return token;
     },
     async session({ session, token }) {
-      // Add role and other user info to the session
       if (token) {
         session.user = {
           ...session.user,
-        //   id: token.sub,
-        //   oid: token.oid,
-          email: token.email,
-          name: token.name,
-        //   role: token.role,
-        //   preferredUsername: token.preferred_username,
+          id: token.dbId as string,
+          email: token.email as string,
+          name: token.name as string,
+          role: token.role as string,
         };
       }
       return session;

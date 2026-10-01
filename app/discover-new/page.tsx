@@ -55,6 +55,7 @@ const Discovery = () => {
     id: string;
     projectId: string;
     applicantId: string;
+    status: "PENDING" | "ACCEPTED" | "REJECTED";
   }
 
   const [allProjects, setAllProjects] = useState<Project[]>([]); // Stores all fetched projects
@@ -64,33 +65,36 @@ const Discovery = () => {
   const [recommendedProjectIds, setRecommendedProjectIds] = useState<string[]>([]);
   const { data: session, status } = useSession();
   const isClient = useIsClient();
-  console.log(status);
-  if (isClient && status != "authenticated") {
-    window.location.href = "/welcome";
-  }
+
+  useEffect(() => {
+    if (isClient && status === "unauthenticated") {
+      window.location.href = "/welcome";
+    }
+  }, [isClient, status]);
+
   const [userId, setId] = useState<string | null>(null);
 
-
-  
   const email = session?.user?.email || "";
 
   const fetchid = async () => {
+    if (!email) return;
     try {
       const response = await fetch(
-        `/api/forProfile/byEmail/${session?.user?.email}`
+        `/api/forProfile/byEmail/${email}`
       );
       const data: User = await response.json();
       setRole(data.role);
       setId(data.id);
-      // Return the ID for proper sequencing
     } catch (err) {
       console.error(err);
       return null;
     }
   };
+
   useEffect(() => {
-    fetchid();
-    console.log(userId);
+    if (email) {
+      fetchid();
+    }
   }, [email]);
   const router = useRouter();
 
@@ -311,6 +315,17 @@ const Discovery = () => {
     }
   }
 
+  // BUG FIX 2.1: Check if application deadline has passed
+  function isDeadlinePassed(project: Project): boolean {
+    if (!project.deadlineToApply) return false;
+    return new Date() > new Date(project.deadlineToApply);
+  }
+
+  // BUG FIX 2.2: Check if applicant slots are full
+  function isCapacityFull(project: Project): boolean {
+    return project.applications.filter((application) => application.status !== "REJECTED").length >= project.applicantCapacity;
+  }
+
   async function fetchUpdatedProjects() {
     setLoading(true); // Start loading
     try {
@@ -347,7 +362,7 @@ const Discovery = () => {
     }
   }
 
- 
+
 
   const handleStarClick = (
     event: React.MouseEvent<HTMLButtonElement, MouseEvent>,
@@ -552,6 +567,24 @@ const Discovery = () => {
                         }}
                       >
                         Withdraw
+                      </Button>
+                    ) : isDeadlinePassed(project) ? (
+                      <Button
+                        variant="outline"
+                        className="bg-gray-400 text-white cursor-not-allowed"
+                        disabled
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Deadline Passed
+                      </Button>
+                    ) : isCapacityFull(project) ? (
+                      <Button
+                        variant="outline"
+                        className="bg-gray-400 text-white cursor-not-allowed"
+                        disabled
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Applications Full
                       </Button>
                     ) : (
                       <Button
