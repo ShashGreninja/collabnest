@@ -413,7 +413,7 @@ export default function Dashboard() {
             ) : null}
           </div>
           <div>
-            <ProjectMessages />
+            <ProjectMessages projectId={currentProject.id} />
             <ProjectResources resources={currentProject.projectResources} />
             {isAuth ? (
               <Button
