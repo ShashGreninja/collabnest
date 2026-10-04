@@ -19,6 +19,7 @@ function SearchParamComponent() {
 
 export default function LandingPage() {
     const [isLoading, setIsLoading] = useState(false);
+    const [addUserError, setAddUserError] = useState<string | null>(null);
 
     const { data: session, status } = useSession();
     console.log('Session -----------> ', session);
@@ -36,29 +37,45 @@ export default function LandingPage() {
         const createUserIfNeeded = async () => {
             if (status === 'authenticated' && session?.user?.name && session?.user?.email) {
                 setIsLoading(true);
-                try {
-                    // Call your API to create the user (will handle existing emails)
-                    const response = await fetch('/api/addUser', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            name: session.user.name,
-                            email: session.user.email,
-                        }),
-                    });
+                setAddUserError(null);
+                // POST uses the server session for identity; no body needed.
+                // Retry once on failure, then surface the error instead of
+                // redirecting as if the user was created.
+                const maxAttempts = 2;
+                let lastError: string = 'Failed to create user';
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    try {
+                        // Call your API to create the user (will handle existing emails)
+                        const response = await fetch('/api/addUser', {
+                            method: 'POST',
+                        });
 
-                    const data = await response.json();
-                    console.log('User creation response:', data);
+                        let data: { error?: string; message?: string } | null = null;
+                        try {
+                            data = await response.json();
+                        } catch {
+                            data = null;
+                        }
+                        console.log('User creation response:', data);
 
-                    // Redirect to dashboard after user is created or verified
-                    window.location.href = '/dashboard';
-                } catch (error) {
-                    console.error('Error creating user:', error);
-                    setIsLoading(false);
-                    // You might want to handle this error differently
+                        if (!response.ok || data?.error) {
+                            lastError = data?.error || `User setup failed (status ${response.status})`;
+                            throw new Error(lastError);
+                        }
+
+                        // Redirect to dashboard only after user is created or verified
+                        window.location.href = '/dashboard';
+                        return;
+                    } catch (error) {
+                        lastError = error instanceof Error ? error.message : 'Failed to create user';
+                        console.error(`Error creating user (attempt ${attempt}/${maxAttempts}):`, error);
+                        if (attempt < maxAttempts) {
+                            await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+                        }
+                    }
                 }
+                setAddUserError(`${lastError}. Please try signing in again.`);
+                setIsLoading(false);
             }
         };
 
@@ -66,6 +83,7 @@ export default function LandingPage() {
     }, [status, session]);
 
     const handleSignIn = () => {
+        setAddUserError(null);
         setIsLoading(true);
         signIn('azure-ad');
     };
@@ -120,6 +138,11 @@ export default function LandingPage() {
                         <Suspense>
                             <SearchParamComponent />
                         </Suspense>
+                        {addUserError && (
+                            <p role="alert" className="mt-3 text-center text-sm text-red-600">
+                                {addUserError}
+                            </p>
+                        )}
                     </div>
                     {/* Terms of Service */}
                     <div className="mt-4 md:mt-6 text-center text-sm text-gray-500">

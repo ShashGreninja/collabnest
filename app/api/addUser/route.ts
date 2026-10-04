@@ -1,7 +1,9 @@
 // api/users/route.ts or api/users/index.ts
 
 import { PrismaClient } from '@prisma/client';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions';
 
 const prisma = new PrismaClient();
 
@@ -66,10 +68,16 @@ function extractStartingYear(rollNumber: string) {
     return (2000 + parseInt(yearPrefix, 10)).toString();
 }
 
-export async function POST(req: NextRequest) {
+export async function POST() {
     try {
-        const body = await req.json();
-        const { name, email } = body;
+        // Trust the signed-in session, never the request body, for identity.
+        const session = await getServerSession(authOptions);
+        const email = session?.user?.email;
+        const name = session?.user?.name;
+
+        if (!session || !email) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
         // Validate inputs
         if (!name || !email) {
