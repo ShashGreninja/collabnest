@@ -43,13 +43,16 @@ export default function ChatWindowPage() {
   };
 
   const { currentProject } = useProject();
-  const projectId = currentProject?.id;
-   const { data: session, status } = useSession();
-    console.log(status);
-    if (status != "authenticated") {
+  const { data: session, status } = useSession();
+  const [userId, setId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
       window.location.href = "/welcome";
     }
-    const [userId, setId] = useState<string | null>(null);
+  }, [status]);
+
+  const projectId = currentProject?.id;
   
   
     

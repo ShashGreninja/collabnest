@@ -1,31 +1,86 @@
-// app/api/chat/[projectId]/messages/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/authOptions";
+import { prisma } from "@/lib/prisma";
 
-const prisma = new PrismaClient();
-
-// GET /api/chat/[projectId]/messages
-// POST /api/chat/[projectId]/messages
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const { projectId } = await params;
-
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please log in." },
+        { status: 401 }
+      );
+    }
+
+    const { projectId } = await params;
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Project ID is required." },
+        { status: 400 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User account not found." },
+        { status: 401 }
+      );
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        members: {
+          where: { userId: user.id },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!project) {
+      return NextResponse.json(
+        { error: "Project not found." },
+        { status: 404 }
+      );
+    }
+
+    const isAuthor = project.authorId === user.id;
+    const isMember = project.members.length > 0;
+    const isAdmin = user.role === "ADMIN";
+
+    if (!isAuthor && !isMember && !isAdmin) {
+      return NextResponse.json(
+        { error: "You are not authorized to view messages in this project." },
+        { status: 403 }
+      );
+    }
+
     const messages = await prisma.message.findMany({
       where: { projectId },
       include: {
         sender: {
-          select: { name: true }, // Include only the sender's name
+          select: { name: true, picture: true },
         },
       },
       orderBy: { createdAt: "asc" },
     });
+
     return NextResponse.json(messages);
   } catch (error) {
     console.error("Error fetching messages:", error);
-    return new NextResponse("Failed to fetch messages", { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error." },
+      { status: 500 }
+    );
   }
 }
 
@@ -33,35 +88,92 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
-  const { projectId } = await params;
   try {
-    const body = await request.json();
-    const { senderId, content } = body;
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please log in." },
+        { status: 401 }
+      );
+    }
 
-    if (!content?.trim()) {
-      return new NextResponse("Message content is required", { status: 400 });
+    const { projectId } = await params;
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Project ID is required." },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json();
+    const content = body?.content?.trim();
+
+    if (!content) {
+      return NextResponse.json(
+        { error: "Message content is required." },
+        { status: 400 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, role: true, name: true },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "User account not found." },
+        { status: 401 }
+      );
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        members: {
+          where: { userId: user.id },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!project) {
+      return NextResponse.json(
+        { error: "Project not found." },
+        { status: 404 }
+      );
+    }
+
+    const isAuthor = project.authorId === user.id;
+    const isMember = project.members.length > 0;
+    const isAdmin = user.role === "ADMIN";
+
+    if (!isAuthor && !isMember && !isAdmin) {
+      return NextResponse.json(
+        { error: "You are not authorized to send messages in this project." },
+        { status: 403 }
+      );
     }
 
     const newMessage = await prisma.message.create({
       data: {
         projectId,
-        senderId,
+        senderId: user.id,
         content,
+      },
+      include: {
+        sender: {
+          select: { name: true, picture: true },
+        },
       },
     });
 
-    // Fetch the sender's name separately
-    const sender = await prisma.user.findUnique({
-      where: { id: senderId },
-      select: { name: true },
-    });
-
-    return NextResponse.json({
-      ...newMessage,
-      sender: { name: sender?.name || null }, // Include the sender's name in the response
-    });
+    return NextResponse.json(newMessage, { status: 201 });
   } catch (error) {
     console.error("Error creating message:", error);
-    return new NextResponse("Failed to create message", { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error." },
+      { status: 500 }
+    );
   }
 }
