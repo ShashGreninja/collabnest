@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AlertCircle, RefreshCw } from "lucide-react";
@@ -27,6 +27,9 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Tracked in a ref so fetchMessages does not depend on `messages`, which it sets.
+  const messageCountRef = useRef(0);
+
   const fetchMessages = useCallback(
     async (isBackground = false) => {
       if (!projectId) return;
@@ -50,13 +53,17 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
         }
 
         const data: Message[] = await res.json();
-        setMessages(Array.isArray(data) ? data : []);
+        const nextMessages = Array.isArray(data) ? data : [];
+        messageCountRef.current = nextMessages.length;
+        setMessages(nextMessages);
         setError(null);
-      } catch (err: any) {
+      } catch (err) {
         console.error("Error fetching preview messages:", err);
         // If background polling fails and we already have messages, don't flash error screen
-        if (!isBackground || messages.length === 0) {
-          setError(err.message || "Failed to load messages");
+        if (!isBackground || messageCountRef.current === 0) {
+          setError(
+            err instanceof Error ? err.message : "Failed to load messages"
+          );
         }
       } finally {
         if (!isBackground) {
@@ -65,11 +72,12 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
         }
       }
     },
-    [projectId, messages.length]
+    [projectId]
   );
 
   useEffect(() => {
     // Clear previous project messages on project switch
+    messageCountRef.current = 0;
     setMessages([]);
     setError(null);
 
