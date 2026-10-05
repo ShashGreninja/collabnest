@@ -25,7 +25,6 @@ import { FaStar } from "react-icons/fa";
 import { Calendar } from "lucide-react";
 import Loader from "@/components/Loader";
 import { useSession } from "next-auth/react";
-import { User } from "@/types/leaderboard";
 import { useIsClient } from "../context/isClientContext";
 
 const Discovery = () => {
@@ -61,10 +60,14 @@ const Discovery = () => {
   const [allProjects, setAllProjects] = useState<Project[]>([]); // Stores all fetched projects
   const [projects, setProjects] = useState<Project[]>([]); // Stores filtered projects
   const [loading, setLoading] = useState<boolean>(true); // Loader state
-  const [role , setRole] = useState<string | null>(null);
   const [recommendedProjectIds, setRecommendedProjectIds] = useState<string[]>([]);
   const { data: session, status } = useSession();
   const isClient = useIsClient();
+
+  // Role/id come straight from the NextAuth session (lib/authOptions jwt/session
+  // callbacks) — same as app/discover/page.tsx, no /byEmail fetch race.
+  const role = session?.user?.role ?? null;
+  const userId = session?.user?.id ?? null;
 
   useEffect(() => {
     if (isClient && status === "unauthenticated") {
@@ -72,41 +75,19 @@ const Discovery = () => {
     }
   }, [isClient, status]);
 
-  const [userId, setId] = useState<string | null>(null);
-
-  const email = session?.user?.email || "";
-
-  const fetchid = async () => {
-    if (!email) return;
-    try {
-      const response = await fetch(
-        `/api/forProfile/byEmail/${email}`
-      );
-      const data: User = await response.json();
-      setRole(data.role);
-      setId(data.id);
-    } catch (err) {
-      console.error(err);
-      return null;
-    }
-  };
-
-  useEffect(() => {
-    if (email) {
-      fetchid();
-    }
-  }, [email]);
   const router = useRouter();
 
   useEffect(() => {
-    if (role === null) return; // Wait until role is fetched
+    if (status !== "authenticated") return;
+    if (role === null) return; // Wait until session role is available
     if (role !== "USER") {
       router.push("/discover");
     }
-  }, [role, router]);
+  }, [status, role, router]);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (status !== "authenticated") return;
       setLoading(true);
       try {
         // Fetch recommended project IDs
@@ -182,7 +163,7 @@ const Discovery = () => {
     };
 
     fetchData();
-  }, [userId, role]);
+  }, [userId, role, status]);
 
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(
     null
