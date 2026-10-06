@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const newRating = getNewRating(user.rating, validScore, toughness);
+        const newRating = Math.round(getNewRating(user.rating, validScore, toughness));
         console.log(`Updating rating for user ${userId}: Old=${user.rating}, New=${newRating}`);
 
         await tx.user.update({
