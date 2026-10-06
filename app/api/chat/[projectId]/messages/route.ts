@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/auth";
 
@@ -18,9 +18,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const messages = await prisma.message.findMany({
     where: { projectId },
     include: { sender: { select: { name: true } } },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
+    take: 4,
   });
-  return NextResponse.json(messages);
+  return NextResponse.json(messages.reverse());
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
