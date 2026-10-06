@@ -20,7 +20,17 @@ interface Message {
   senderId: string;
   content: string;
   createdAt: string;
+  sender?: { name: string | null } | null;
 }
+
+// Mirrors the initials the nameByUserId route derives, so a name already in
+// hand does not need a round trip to be displayed.
+const initialsFromName = (name: string) =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase())
+    .join("");
 
 export default function ChatWindowPage() {
   const router = useRouter();
@@ -176,7 +186,25 @@ export default function ChatWindowPage() {
         }),
       });
       if (!res.ok) throw new Error("Failed to send message");
-      const createdMessage = { ...(await res.json()), sender: { name: "" } };
+
+      // Keep the sender the API returned instead of blanking it, and seed the
+      // initials map from it so this message needs no extra name lookup.
+      const createdMessage: Message = await res.json();
+      const senderName = createdMessage.sender?.name;
+      if (senderName) {
+        setUserInitialsMap((prev) =>
+          prev[createdMessage.senderId]
+            ? prev
+            : {
+                ...prev,
+                [createdMessage.senderId]: {
+                  name: senderName,
+                  initial: initialsFromName(senderName),
+                },
+              }
+        );
+      }
+
       setMessages((prev) => [...prev, createdMessage]);
       setNewMessage("");
     } catch (error) {
