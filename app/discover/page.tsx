@@ -25,7 +25,6 @@ import { FaStar } from "react-icons/fa";
 import { Calendar } from "lucide-react";
 import Loader from "@/components/Loader";
 import { useSession } from "next-auth/react";
-import { User } from "@/types/leaderboard";
 import { useIsClient } from "../context/isClientContext";
 
 const Discovery = () => {
@@ -64,53 +63,43 @@ const Discovery = () => {
 
 
    const { data: session, status } = useSession();
-    console.log(status);
-    if (isClient && status != "authenticated") {
-      window.location.href = "/welcome";
-    }
-    const [userId, setId] = useState<string | null>(null);
-    const [role , setRole] = useState<string | null>(null);
     const router = useRouter();
-    
-    const email = session?.user?.email || "";
-  
-    const fetchid = async () => {
-      try {
-        const response = await fetch(
-          `/api/forProfile/byEmail/${session?.user?.email}`
-        );
-        const data: User = await response.json();
-        setRole(data.role);
-        setId(data.id);
-        // Return the ID for proper sequencing
-      } catch (err) {
-        console.error(err);
-        return null;
-      }
-    };
-    useEffect(() => {
-      fetchid();
-      console.log(userId);
-    }, [email]);
+    // Role comes straight from the NextAuth session (lib/authOptions jwt/session
+    // callbacks) — no extra /byEmail fetch, so no undefined-email race.
+    const role = session?.user?.role ?? null;
 
     useEffect(() => {
-      if (role === null) return; 
+      if (isClient && status === "unauthenticated") {
+        window.location.href = "/welcome";
+      }
+    }, [isClient, status]);
+
+    useEffect(() => {
+      if (status !== "authenticated") return;
       if (role === "USER") {
         router.push("/discover-new");
       }
-    }, [role, router]);
+    }, [status, role, router]);
 
 
   useEffect(() => {
     setLoading(true); // Start loading
 
     fetch("/api/projects/All_Project")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(`All_Project ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
+        if (!Array.isArray(data)) throw new Error("All_Project non-array");
         setAllProjects(data); // Keep all projects
         setProjects(data); // Show all projects initially
       })
-      .catch((err) => console.error(err))
+      .catch((err) => {
+        console.error(err);
+        setAllProjects([]);
+        setProjects([]);
+      })
       .finally(() => setLoading(false)); // Stop loading
   }, []);
 
