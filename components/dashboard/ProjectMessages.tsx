@@ -37,9 +37,16 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
     activeProjectRef.current = projectId;
   }, [projectId]);
 
+  // Holds the project of the request currently in flight. A request can take
+  // longer than the poll interval, and this stops a second poll stacking on
+  // top of it — while still letting a newly selected project fetch at once.
+  const inFlightRef = useRef<string | null>(null);
+
   const fetchMessages = useCallback(
     async (isBackground = false) => {
       if (!projectId) return;
+      if (inFlightRef.current === projectId) return;
+      inFlightRef.current = projectId;
 
       if (!isBackground) {
         setLoading(true);
@@ -77,6 +84,7 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
           );
         }
       } finally {
+        if (inFlightRef.current === projectId) inFlightRef.current = null;
         // A stale request must not clear the loading flags of the one that replaced it.
         if (!isBackground && projectId === activeProjectRef.current) {
           setLoading(false);
@@ -108,6 +116,9 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
   }, [projectId, fetchMessages]);
 
   const handleManualRefresh = () => {
+    // Nothing to do if a poll for this project is already running; the spinner
+    // would otherwise be left spinning by a call that returns immediately.
+    if (inFlightRef.current === projectId) return;
     setRefreshing(true);
     fetchMessages(false);
   };

@@ -124,9 +124,13 @@ export default function ChatWindowPage() {
     // A request started for a previous project can resolve after the switch;
     // compare against the project this effect run belongs to and drop it.
     let active = true;
+    let inFlight = false;
     setMessages([]);
 
     const fetchMessages = async () => {
+      // A slow request can outlast the interval; don't stack another on top.
+      if (inFlight) return;
+      inFlight = true;
       try {
         const res = await fetch(`/api/chat/${projectId}/messages`);
         if (!res.ok) throw new Error("Failed to fetch messages");
@@ -144,6 +148,8 @@ export default function ChatWindowPage() {
         }
       } catch (error) {
         if (active) console.error(error);
+      } finally {
+        inFlight = false;
       }
     };
 
