@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid"; // Import uuid
-import { Subtask, Status, Project } from "@/types/leaderboard.ts";
+import { Subtask, Status, Project, ProjectMember } from "@/types/leaderboard.ts";
 
 const EditTaskTimelineModal = ({
   isOpen,
@@ -16,11 +16,30 @@ const EditTaskTimelineModal = ({
   onSave: (tasks: Subtask[]) => void;
 }) => {
   const [taskList, setTaskList] = useState<Subtask[]>(tasks || []);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
 
   // Update taskList when tasks prop or projectId changes
   useEffect(() => {
     setTaskList(tasks || []);
   }, [tasks, projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const fetchMembers = async () => {
+      try {
+        const response = await fetch(
+          `/api/forDashboard/fetchProjectMembers/${projectId}`
+        );
+        if (!response.ok) throw new Error("Failed to fetch project members");
+        setMembers(await response.json());
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchMembers();
+  }, [projectId]);
 
   const handleAddTask = () => {
     setTaskList([
@@ -32,6 +51,7 @@ const EditTaskTimelineModal = ({
         status: "OPEN" as Status,
         deadline: "",
         projectId: projectId,
+        assigneeId: null,
         project: {} as Project,
       },
     ]);
@@ -40,7 +60,7 @@ const EditTaskTimelineModal = ({
   const handleTaskChange = (
     id: string,
     field: keyof Subtask,
-    value: string | Status
+    value: string | Status | null
   ) => {
     setTaskList(
       taskList.map((task) =>
@@ -162,6 +182,26 @@ const EditTaskTimelineModal = ({
                   <option value='OPEN'>To Do</option>
                   <option value='IN_PROGRESS'>In Progress</option>
                   <option value='CLOSED'>Done</option>
+                </select>
+              </div>
+
+              {/* Task Assignee */}
+              <div className='mb-3'>
+                <label className='block text-sm font-medium text-gray-700 mb-1'>
+                  Assigned to
+                </label>
+                <select
+                  value={task.assigneeId ?? ""}
+                  onChange={(e) =>
+                    handleTaskChange(task.id, "assigneeId", e.target.value || null)
+                  }
+                  className='w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-gray-300'>
+                  <option value=''>Unassigned</option>
+                  {members.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {member.user?.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

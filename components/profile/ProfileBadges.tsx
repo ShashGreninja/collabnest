@@ -25,15 +25,28 @@ export const ProfileBadges = ({ id }: { id: string }) => {
         const user = await userRes.json();
         const leaderboard = leaderboardRes.ok ? await leaderboardRes.json() : [];
 
+        const participated = user.projectsParticipated ?? [];
+        const awardedAt: Record<string, string> = {};
+        for (const badge of user.badges ?? []) {
+          awardedAt[badge.badgeKey] = badge.awardedAt;
+        }
+
         setBadges(
-          evaluateBadges({
-            role: user.role,
-            applications: user.applications ?? [],
-            projectCreated: user.projectCreated ?? [],
-            projectsParticipated: user.projectsParticipated ?? [],
-            messageCount: user._count?.sentMessages ?? 0,
-            isRankOne: leaderboard[0]?.id === id,
-          })
+          evaluateBadges(
+            {
+              role: user.role,
+              applications: user.applications ?? [],
+              projectCreated: user.projectCreated ?? [],
+              projectsParticipated: participated,
+              messageCount: user._count?.sentMessages ?? 0,
+              assignedSubtaskCount: user._count?.assignedSubtasks ?? 0,
+              memberScores: participated
+                .map((p: { score: number | null }) => p.score)
+                .filter((score: number | null): score is number => score !== null),
+              isRankOne: leaderboard[0]?.id === id,
+            },
+            awardedAt
+          )
         );
       } catch (err) {
         console.error(err);
@@ -61,6 +74,11 @@ export const ProfileBadges = ({ id }: { id: string }) => {
               {badge.name}
             </Badge>
             <p className="mt-1 text-sm text-muted-foreground">{badge.description}</p>
+            {badge.earned && badge.awardedAt && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {new Date(badge.awardedAt).toLocaleDateString()}
+              </p>
+            )}
             {!badge.earned && badge.progress && (
               <p className="mt-1 text-xs text-muted-foreground">
                 {Math.min(badge.progress.current, badge.progress.target)}/

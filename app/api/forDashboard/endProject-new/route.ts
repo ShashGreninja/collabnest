@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUser } from '@/lib/auth';
+import { earnedBadgeKeys } from '@/lib/badges';
 
 function getNewRating(oldRating: number, score: number, toughness: number): number {
   let p = 2000;
@@ -125,6 +126,51 @@ export async function POST(request: NextRequest) {
         await tx.user.update({
           where: { id: userId },
           data: { rating: newRating },
+        });
+
+        await tx.projectMember.updateMany({
+          where: { projectId, userId },
+          data: { score: validScore, completedAt: new Date() },
+        });
+      }
+
+      for (const userId of Object.keys(ratings || {})) {
+        const member = await tx.user.findUnique({
+          where: { id: userId },
+          select: {
+            role: true,
+            applications: { select: { id: true } },
+            projectCreated: { select: { status: true } },
+            projectsParticipated: {
+              select: {
+                score: true,
+                project: {
+                  select: { status: true, difficultyTag: true, requirementTags: true },
+                },
+              },
+            },
+            _count: { select: { sentMessages: true, assignedSubtasks: true } },
+          },
+        });
+
+        if (!member) continue;
+
+        const keys = earnedBadgeKeys({
+          role: member.role,
+          applications: member.applications,
+          projectCreated: member.projectCreated,
+          projectsParticipated: member.projectsParticipated,
+          messageCount: member._count.sentMessages,
+          assignedSubtaskCount: member._count.assignedSubtasks,
+          memberScores: member.projectsParticipated
+            .map((p) => p.score)
+            .filter((score): score is number => score !== null),
+          isRankOne: false,
+        });
+
+        await tx.userBadge.createMany({
+          data: keys.map((badgeKey) => ({ userId, badgeKey })),
+          skipDuplicates: true,
         });
       }
 
