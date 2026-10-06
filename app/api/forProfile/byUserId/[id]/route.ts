@@ -33,7 +33,8 @@ export async function GET(
           include:{
             project:true
           }
-        }// Add more attributes as needed
+        },
+        _count: { select: { sentMessages: true } }// Add more attributes as needed
       },
     });
 
