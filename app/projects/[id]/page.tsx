@@ -29,22 +29,23 @@ export default function ProjectDetails() {
   const email = session?.user?.email || "";
 
   const fetchid = async () => {
+    if (!email) return;
     try {
       const response = await fetch(
-        `/api/forProfile/byEmail/${session?.user?.email}`
+        `/api/forProfile/byEmail/${email}`
       );
       const data: User = await response.json();
       setRole(data.role);
       setId(data.id);
-      // Return the ID for proper sequencing
     } catch (err) {
       console.error(err);
       return null;
     }
   };
   useEffect(() => {
-    fetchid();
-    console.log(userId);
+    if (email) {
+      fetchid();
+    }
   }, [email]);
   async function fetchProject() {
     try {
@@ -103,7 +104,29 @@ export default function ProjectDetails() {
     .map((member : any) => member.applicantId)
     .includes(userId);
 
+  // BUG FIX 2.1: Derive deadline state
+  const deadlinePassed = project?.deadlineToApply
+    ? new Date() > new Date(project.deadlineToApply)
+    : false;
+
+  // BUG FIX 2.2: Derive capacity state
+  const capacityFull =
+    project && project.applications.filter((application: any) => application.status !== "REJECTED").length >= project.applicantCapacity;
+
   const action = enrollment ? "withdraw" : "apply";
+
+  // Disable enroll button if not already enrolled and deadline passed or capacity full
+  const enrollDisabled = buttonLoading || (!enrollment && (deadlinePassed || capacityFull));
+
+  const enrollLabel = buttonLoading
+    ? "Loading..."
+    : enrollment
+    ? "UnEnroll"
+    : deadlinePassed
+    ? "Deadline Passed"
+    : capacityFull
+    ? "Applications Full"
+    : "Enroll in Project";
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p className="text-red-500">Error: {error}</p>;
@@ -179,10 +202,14 @@ export default function ProjectDetails() {
         </p>
         <button
           onClick={() => applyForProject(projectId, action)}
-          disabled={buttonLoading}
-          className="w-full bg-black hover:bg-gray-800 tracking-wider active:scale-95 text-white py-2 rounded-xl transition-all duration-200 ease-in-out shadow-md hover:shadow-lg"
+          disabled={enrollDisabled}
+          className={`w-full tracking-wider active:scale-95 text-white py-2 rounded-xl transition-all duration-200 ease-in-out shadow-md hover:shadow-lg ${
+            enrollDisabled && !enrollment
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-black hover:bg-gray-800'
+          }`}
         >
-          {buttonLoading ? "Loading..." : enrollment ? "UnEnroll" : "Enroll in Project"}
+          {enrollLabel}
         </button>
       </div>
 

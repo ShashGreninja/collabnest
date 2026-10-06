@@ -31,8 +31,6 @@ const EditTeamModal = ({
 }) => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(false);
-  const [acceptedIds, setAcceptedIds] = useState<string[]>([]); // Track IDs of accepted applications
-  const [rejectedIds, setRejectedIds] = useState<string[]>([]); // Track IDs of rejected applications
   const [error, setError] = useState<string | null>(null);
   const [projectMembers, setProjectMembers] = useState<any[]>([]); // Track project members
   const router = useRouter();
@@ -161,40 +159,6 @@ const EditTeamModal = ({
       setLoading(false);
     }
   };
-  // Save changes and send PUT request
-  const saveChanges = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      // Send PUT request with accepted and rejected IDs
-      const response = await fetch(`/api/forDashboard/update_applications`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ acceptedIds, rejectedIds }),
-      });
-
-      if (!response.ok)
-        throw new Error("Failed to update application statuses");
-
-      // Clear the accepted and rejected IDs
-      setAcceptedIds([]);
-      setRejectedIds([]);
-
-      // Close the modal
-      onClose();
-
-      // Refresh the applications
-      fetchApplications();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to update statuses"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchProjectMembers = async () => {
     try {
       const response = await fetch(
@@ -246,8 +210,6 @@ const EditTeamModal = ({
             size="icon"
             onClick={() => {
               onClose();
-              setAcceptedIds([]);
-              setRejectedIds([]);
             }}
             className="text-gray-500 hover:text-gray-700 h-8 w-8"
           >
@@ -305,18 +267,17 @@ const EditTeamModal = ({
                       <div className="flex gap-2">
                         <Button
                           onClick={() => {
-                            setAcceptedIds([...acceptedIds, application.id]);
                             handleAction("accept", application.id);
                           }}
                           disabled={loading}
                           variant={
-                            acceptedIds.includes(application.id)
+                            false
                               ? "default"
                               : "outline"
                           }
                           size="sm"
                           className={`${
-                            acceptedIds.includes(application.id)
+                            false
                               ? "bg-green-600 hover:bg-green-700 text-white"
                               : "border-green-600 text-green-600 hover:bg-green-50"
                           } transition-colors`}
@@ -326,18 +287,17 @@ const EditTeamModal = ({
 
                         <Button
                           onClick={() => {
-                            setRejectedIds([...rejectedIds, application.id]);
                             handleAction("reject", application.id);
                           }}
                           disabled={loading}
                           variant={
-                            rejectedIds.includes(application.id)
+                            false
                               ? "default"
                               : "outline"
                           }
                           size="sm"
                           className={`${
-                            rejectedIds.includes(application.id)
+                            false
                               ? "bg-red-600 hover:bg-red-700 text-white"
                               : "border-red-600 text-red-600 hover:bg-red-50"
                           } transition-colors`}
@@ -406,13 +366,6 @@ const EditTeamModal = ({
         <div className="flex justify-end p-4 border-t sticky bottom-0 bg-white gap-2 shadow-md">
           <Button variant="outline" onClick={onClose} className="text-gray-700">
             close
-          </Button>
-          <Button
-            onClick={saveChanges}
-            disabled={acceptedIds.length === 0 && rejectedIds.length === 0}
-            className="bg-black hover:bg-gray-800 text-white disabled:opacity-50"
-          >
-            Save Changes
           </Button>
         </div>
       </div>

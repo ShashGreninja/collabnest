@@ -7,9 +7,11 @@ import Link from 'next/link';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSession } from "next-auth/react";
+import { useParams, useRouter } from "next/navigation";
 import { User } from "@/types/leaderboard";
 import { useProject } from "../../../context/projectContext";
 import ProjectDetailsModal from '@/components/modals/ProjectDetailsModal';
+import { Project } from "@/types/leaderboard";
 
 
 interface Message {
@@ -20,64 +22,67 @@ interface Message {
   createdAt: string;
 }
 
-
-
-
-
 export default function ChatWindowPage() {
-  
+  const router = useRouter();
+
+  // BUG FIX 3.1: Read projectId from URL params, not from ephemeral React context
+  const params = useParams();
+  const projectId = params.projectId as string;
+
   const [userInitialsMap, setUserInitialsMap] = useState<Record<string, any>>({});
-  
+
   const fetchUserInitials = async (senderId: string) => {
-    if (userInitialsMap[senderId]) return; // Skip if already fetched
-  
+    if (userInitialsMap[senderId]) return;
     try {
       const response = await fetch(`/api/forProfile/nameByUserId/${senderId}`);
       if (!response.ok) throw new Error("Failed to fetch user name");
       const data = await response.json();
-      setUserInitialsMap((prev) => ({ ...prev, [senderId]: data })); // Update the map
-      
+      setUserInitialsMap((prev) => ({ ...prev, [senderId]: data }));
     } catch (error) {
       console.error(error);
     }
   };
 
-  const { currentProject } = useProject();
-  const { data: session, status } = useSession();
-  const [userId, setId] = useState<string | null>(null);
+  // Keep context-based project as fallback when navigating from dashboard
+  const { currentProject, setCurrentProject } = useProject();
 
+  // BUG FIX 3.1: Auth guard — wait for loading to finish before redirecting
+  const { data: session, status } = useSession();
   useEffect(() => {
     if (status === "unauthenticated") {
-      window.location.href = "/welcome";
+      router.replace("/welcome");
     }
-  }, [status]);
+  }, [status, router]);
 
-  const projectId = currentProject?.id;
-  
-  
-    
-    const email = session?.user?.email || "";
-  
-    const fetchid = async () => {
-      try {
-        const response = await fetch(
-          `/api/forProfile/byEmail/${session?.user?.email}`
-        );
-        const data: User = await response.json();
-        console.log(data);
-        setId(data.id);
-        // Return the ID for proper sequencing
-      } catch (err) {
-        console.error(err);
-        return null;
-      }
-    };
+  const [userId, setId] = useState<string | null>(null);
+  const email = session?.user?.email || "";
 
-    useEffect(() => {
-      fetchid();
-      console.log(userId);
-    }, [email]);
-  
+  const fetchid = async () => {
+    // BUG FIX 3.1: Only fetch if email is available
+    if (!email) return;
+    try {
+      const response = await fetch(`/api/forProfile/byEmail/${email}`);
+      const data: User = await response.json();
+      setId(data.id);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchid();
+  }, [email]);
+
+  // BUG FIX 3.1: If context lost after refresh, fetch project by route param
+  useEffect(() => {
+    if (!currentProject && projectId) {
+      fetch(`/api/projects/${projectId}`)
+        .then((res) => res.json())
+        .then((data: Project) => setCurrentProject(data))
+        .catch(console.error);
+    }
+  }, [projectId, currentProject, setCurrentProject]);
+
   const currentUserId = userId;
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -85,21 +90,16 @@ export default function ChatWindowPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  
 
-  // Check if user is at bottom of scroll before new messages arrive
   const checkIfNearBottom = () => {
     if (!chatContainerRef.current) return false;
-    
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-    // If user is within 100px of bottom, consider them "at bottom"
     return scrollHeight - scrollTop - clientHeight < 100;
   };
 
-  // Handle scroll events
   const handleScroll = () => {
     setShouldAutoScroll(checkIfNearBottom());
-  }
+  };
 
   // 1) Fetch messages on mount + poll every 5 seconds
   useEffect(() => {
@@ -107,16 +107,16 @@ export default function ChatWindowPage() {
 
     const fetchMessages = async () => {
       if (!projectId) return;
-      
       try {
         const res = await fetch(`/api/chat/${projectId}/messages`);
         if (!res.ok) throw new Error("Failed to fetch messages");
         const data: Message[] = await res.json();
-        
-        // Only update if there are new messages to prevent unnecessary re-renders
-        if (messages.length !== data.length || 
-            (data.length > 0 && messages.length > 0 && data[data.length-1].id !== messages[messages.length-1].id)) {
-              console.log(data)
+        if (
+          messages.length !== data.length ||
+          (data.length > 0 &&
+            messages.length > 0 &&
+            data[data.length - 1].id !== messages[messages.length - 1].id)
+        ) {
           setMessages(data);
         }
       } catch (error) {
@@ -125,7 +125,7 @@ export default function ChatWindowPage() {
     };
 
     fetchMessages();
-    intervalId = setInterval(fetchMessages, 5000); // Poll every 5s
+    intervalId = setInterval(fetchMessages, 5000);
 
     return () => {
       clearInterval(intervalId);
@@ -145,17 +145,13 @@ export default function ChatWindowPage() {
         await fetchUserInitials(message.senderId);
       }
     };
-  
     fetchInitialsForMessages();
   }, [messages]);
 
   // 3) Send new message
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !projectId) return;
-    
-    // Force scroll to bottom when sending a new message
     setShouldAutoScroll(true);
-    
     try {
       const res = await fetch(`/api/chat/${projectId}/messages`, {
         method: "POST",
@@ -166,10 +162,8 @@ export default function ChatWindowPage() {
         }),
       });
       if (!res.ok) throw new Error("Failed to send message");
-      
-      const createdMessage = { ...(await res.json()), sender: {name:"" }};
+      const createdMessage = { ...(await res.json()), sender: { name: "" } };
       setMessages((prev) => [...prev, createdMessage]);
-      console.log(messages)
       setNewMessage("");
     } catch (error) {
       console.error(error);
@@ -190,10 +184,16 @@ export default function ChatWindowPage() {
 
   const [details1, setDetails1] = useState(false);
 
+  // Show spinner while session is loading
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <p className="text-gray-500 text-lg">Loading...</p>
+      </div>
+    );
+  }
 
   return (
-    
-
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
       <div className="flex items-center p-4 bg-white border-b shadow-sm">
@@ -202,22 +202,28 @@ export default function ChatWindowPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </Link>
-        <h2 className="text-xl font-semibold flex-grow">Project Chat: {projectId ? projectId.substring(0, 8) : 'Loading'}...</h2>
+        <h2 className="text-xl font-semibold flex-grow">
+          {currentProject?.title
+            ? `Project Chat: ${currentProject.title}`
+            : projectId
+            ? `Project Chat: ${projectId.substring(0, 8)}...`
+            : 'Project Chat'}
+        </h2>
         <Button variant='outline' onClick={() => setDetails1(true)} size='sm'>
           Project Details
         </Button>
 
-        {details1 && (
+        {details1 && currentProject && (
           <ProjectDetailsModal
             isOpen={details1}
             onClose={() => setDetails1(false)}
-            proj={currentProject!}
-          />
-        )}
+            proj={currentProject}
+          />
+        )}
       </div>
 
       {/* Messages container */}
-      <div 
+      <div
         ref={chatContainerRef}
         className="flex-grow overflow-y-auto p-4"
         onScroll={handleScroll}
@@ -225,14 +231,14 @@ export default function ChatWindowPage() {
         <Card className="border-0 shadow-sm mb-4">
           <CardContent className="p-0">
             <div className="space-y-4 p-4">
-              {messages.map( (msg) => {
+              {messages.map((msg) => {
                 const isCurrentUser = msg.senderId === currentUserId;
                 const userInitials = userInitialsMap[msg.senderId]?.initial || "??";
                 const userName = userInitialsMap[msg.senderId]?.name || "Unknown User";
-                
+
                 return (
-                  <div 
-                    key={msg.id} 
+                  <div
+                    key={msg.id}
                     className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                   >
                     <div className={`flex max-w-[80%] ${isCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -241,21 +247,16 @@ export default function ChatWindowPage() {
                           {userInitials}
                         </AvatarFallback>
                       </Avatar>
-                      
+
                       <div>
-                          
-                        <div 
+                        <div
                           className={`rounded-lg p-3 ${
-                            isCurrentUser 
-                              ? 'bg-blue-100 text-blue-900' 
+                            isCurrentUser
+                              ? 'bg-blue-100 text-blue-900'
                               : 'bg-gray-100 text-gray-900'
                           }`}
                         >
-                          <div className={`font-bold ${
-                            isCurrentUser 
-                              && 'hidden' 
-                              
-                          }`}>{userName}</div>
+                          <div className={`font-bold ${isCurrentUser && 'hidden'}`}>{userName}</div>
                           {msg.content}
                         </div>
                         <div className={`text-xs text-gray-500 mt-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
@@ -282,9 +283,9 @@ export default function ChatWindowPage() {
             placeholder="Type your message..."
             className="flex-grow mr-2 h-12 rounded-full border-gray-300"
           />
-          <Button 
-            onClick={handleSendMessage} 
-            size="icon" 
+          <Button
+            onClick={handleSendMessage}
+            size="icon"
             className="h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700"
           >
             <Send className="h-5 w-5" />
