@@ -101,36 +101,50 @@ export default function ChatWindowPage() {
     setShouldAutoScroll(checkIfNearBottom());
   };
 
+  // Latest messages, readable inside the poll without making it a dependency.
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   // 1) Fetch messages on mount + poll every 5 seconds
   useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval>;
+    if (!projectId) return;
+
+    // A request started for a previous project can resolve after the switch;
+    // compare against the project this effect run belongs to and drop it.
+    let active = true;
+    setMessages([]);
 
     const fetchMessages = async () => {
-      if (!projectId) return;
       try {
         const res = await fetch(`/api/chat/${projectId}/messages`);
         if (!res.ok) throw new Error("Failed to fetch messages");
         const data: Message[] = await res.json();
+        if (!active) return;
+
+        const current = messagesRef.current;
         if (
-          messages.length !== data.length ||
+          current.length !== data.length ||
           (data.length > 0 &&
-            messages.length > 0 &&
-            data[data.length - 1].id !== messages[messages.length - 1].id)
+            current.length > 0 &&
+            data[data.length - 1].id !== current[current.length - 1].id)
         ) {
           setMessages(data);
         }
       } catch (error) {
-        console.error(error);
+        if (active) console.error(error);
       }
     };
 
     fetchMessages();
-    intervalId = setInterval(fetchMessages, 5000);
+    const intervalId = setInterval(fetchMessages, 5000);
 
     return () => {
+      active = false;
       clearInterval(intervalId);
     };
-  }, [projectId, messages.length]);
+  }, [projectId]);
 
   // 2) Smart scroll behavior
   useEffect(() => {

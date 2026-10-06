@@ -30,6 +30,13 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
   // Tracked in a ref so fetchMessages does not depend on `messages`, which it sets.
   const messageCountRef = useRef(0);
 
+  // The project the card is currently showing. A request started for a previous
+  // project can resolve after the switch, so responses are matched against this.
+  const activeProjectRef = useRef(projectId);
+  useEffect(() => {
+    activeProjectRef.current = projectId;
+  }, [projectId]);
+
   const fetchMessages = useCallback(
     async (isBackground = false) => {
       if (!projectId) return;
@@ -53,11 +60,15 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
         }
 
         const data: Message[] = await res.json();
+        if (projectId !== activeProjectRef.current) return;
+
         const nextMessages = Array.isArray(data) ? data : [];
         messageCountRef.current = nextMessages.length;
         setMessages(nextMessages);
         setError(null);
       } catch (err) {
+        if (projectId !== activeProjectRef.current) return;
+
         console.error("Error fetching preview messages:", err);
         // If background polling fails and we already have messages, don't flash error screen
         if (!isBackground || messageCountRef.current === 0) {
@@ -66,7 +77,8 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
           );
         }
       } finally {
-        if (!isBackground) {
+        // A stale request must not clear the loading flags of the one that replaced it.
+        if (!isBackground && projectId === activeProjectRef.current) {
           setLoading(false);
           setRefreshing(false);
         }
