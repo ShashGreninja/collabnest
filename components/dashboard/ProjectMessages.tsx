@@ -30,9 +30,23 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
   // Tracked in a ref so fetchMessages does not depend on `messages`, which it sets.
   const messageCountRef = useRef(0);
 
+  // The project the card is currently showing. A request started for a previous
+  // project can resolve after the switch, so responses are matched against this.
+  const activeProjectRef = useRef(projectId);
+  useEffect(() => {
+    activeProjectRef.current = projectId;
+  }, [projectId]);
+
+  // Holds the project of the request currently in flight. A request can take
+  // longer than the poll interval, and this stops a second poll stacking on
+  // top of it — while still letting a newly selected project fetch at once.
+  const inFlightRef = useRef<string | null>(null);
+
   const fetchMessages = useCallback(
     async (isBackground = false) => {
       if (!projectId) return;
+      if (inFlightRef.current === projectId) return;
+      inFlightRef.current = projectId;
 
       if (!isBackground) {
         setLoading(true);
@@ -53,11 +67,15 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
         }
 
         const data: Message[] = await res.json();
+        if (projectId !== activeProjectRef.current) return;
+
         const nextMessages = Array.isArray(data) ? data : [];
         messageCountRef.current = nextMessages.length;
         setMessages(nextMessages);
         setError(null);
       } catch (err) {
+        if (projectId !== activeProjectRef.current) return;
+
         console.error("Error fetching preview messages:", err);
         // If background polling fails and we already have messages, don't flash error screen
         if (!isBackground || messageCountRef.current === 0) {
@@ -66,7 +84,9 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
           );
         }
       } finally {
-        if (!isBackground) {
+        if (inFlightRef.current === projectId) inFlightRef.current = null;
+        // A stale request must not clear the loading flags of the one that replaced it.
+        if (!isBackground && projectId === activeProjectRef.current) {
           setLoading(false);
           setRefreshing(false);
         }
@@ -96,6 +116,9 @@ export function ProjectMessages({ projectId }: ProjectMessagesProps) {
   }, [projectId, fetchMessages]);
 
   const handleManualRefresh = () => {
+    // Nothing to do if a poll for this project is already running; the spinner
+    // would otherwise be left spinning by a call that returns immediately.
+    if (inFlightRef.current === projectId) return;
     setRefreshing(true);
     fetchMessages(false);
   };
