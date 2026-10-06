@@ -34,7 +34,8 @@ export async function GET(
             project:true
           }
         },
-        _count: { select: { sentMessages: true } }// Add more attributes as needed
+        badges: { select: { badgeKey: true, awardedAt: true } },
+        _count: { select: { sentMessages: true, assignedSubtasks: true } }// Add more attributes as needed
       },
     });
 

@@ -119,6 +119,7 @@ interface Task {
   description: string;
   status: string;
   deadline?: string | null;
+  assigneeId?: string | null;
 }
 
 export const updateSubtasks = async (request: NextRequest) => {
@@ -160,6 +161,7 @@ export const updateSubtasks = async (request: NextRequest) => {
             description: task.description,
             status: task.status,
             deadline: task.deadline ? new Date(task.deadline).toISOString() : null,
+            assigneeId: task.assigneeId || null,
           },
         });
       } else {
@@ -170,6 +172,7 @@ export const updateSubtasks = async (request: NextRequest) => {
             description: task.description,
             status: task.status,
             deadline: task.deadline ? new Date(task.deadline).toISOString() : null,
+            assigneeId: task.assigneeId || null,
             projectId,
           },
         });

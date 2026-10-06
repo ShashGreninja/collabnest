@@ -14,6 +14,8 @@ export type BadgeCtx = {
   projectCreated: { status: string }[];
   projectsParticipated: { project: BadgeProject }[];
   messageCount: number;
+  assignedSubtaskCount: number;
+  memberScores: number[];
   isRankOne: boolean;
 };
 
@@ -22,6 +24,7 @@ export type BadgeResult = {
   name: string;
   description: string;
   earned: boolean;
+  awardedAt?: string;
   progress?: { current: number; target: number };
 };
 
@@ -30,11 +33,14 @@ type BadgeRule = {
   name: string;
   description: string;
   tier?: number;
+  transient?: boolean;
   evaluate: (ctx: BadgeCtx) => boolean;
   progress?: (ctx: BadgeCtx) => { current: number; target: number };
 };
 
 const COMMUNICATOR_MESSAGES = 20;
+const CONSISTENT_SCORE = 8;
+const CONSISTENT_PROJECTS = 3;
 
 const COMPLETION_TIERS = [
   { key: "soldier", name: "Soldier", count: 1 },
@@ -103,9 +109,35 @@ export const BADGES: BadgeRule[] = [
       ctx.role === "PROFESSOR" && ctx.projectCreated.some((p) => p.status === "CLOSED"),
   },
   {
+    key: "novice",
+    name: "Novice",
+    description: "Assigned to a project task",
+    evaluate: (ctx) => ctx.assignedSubtaskCount > 0,
+  },
+  {
+    key: "flawless",
+    name: "Flawless",
+    description: "Scored a perfect 10 on a project",
+    evaluate: (ctx) => ctx.memberScores.includes(10),
+  },
+  {
+    key: "consistent",
+    name: "Consistent",
+    description: `Scored ${CONSISTENT_SCORE} or above on ${CONSISTENT_PROJECTS} projects`,
+    evaluate: (ctx) =>
+      ctx.memberScores.filter((score) => score >= CONSISTENT_SCORE).length >=
+      CONSISTENT_PROJECTS,
+    progress: (ctx) => ({
+      current: ctx.memberScores.filter((score) => score >= CONSISTENT_SCORE).length,
+      target: CONSISTENT_PROJECTS,
+    }),
+  },
+  {
     key: "top-dawg",
     name: "Top Dawg!",
     description: "Ranked first on the contributor leaderboard",
+    // Stops being true the moment someone overtakes, so it is never persisted.
+    transient: true,
     evaluate: (ctx) => ctx.isRankOne,
   },
   {
@@ -120,22 +152,37 @@ export const BADGES: BadgeRule[] = [
   },
 ];
 
-function toBadge(rule: BadgeRule, ctx: BadgeCtx): BadgeResult {
+function toBadge(
+  rule: BadgeRule,
+  ctx: BadgeCtx,
+  awardedAt: Record<string, string>
+): BadgeResult {
   return {
     key: rule.key,
     name: rule.name,
     description: rule.description,
     earned: rule.evaluate(ctx),
+    awardedAt: awardedAt[rule.key],
     progress: rule.progress?.(ctx),
   };
 }
 
-export function evaluateBadges(ctx: BadgeCtx): BadgeResult[] {
+// Transient badges are left out so a stored award never contradicts the rule.
+export function earnedBadgeKeys(ctx: BadgeCtx): string[] {
+  return BADGES.filter((rule) => !rule.transient && rule.evaluate(ctx)).map(
+    (rule) => rule.key
+  );
+}
+
+export function evaluateBadges(
+  ctx: BadgeCtx,
+  awardedAt: Record<string, string> = {}
+): BadgeResult[] {
   const tiered = BADGES.filter((rule) => rule.tier !== undefined).map((rule) =>
-    toBadge(rule, ctx)
+    toBadge(rule, ctx, awardedAt)
   );
   const rest = BADGES.filter((rule) => rule.tier === undefined).map((rule) =>
-    toBadge(rule, ctx)
+    toBadge(rule, ctx, awardedAt)
   );
 
   // Only the highest tier reached is worth showing, otherwise Grandmaster sits
