@@ -134,7 +134,14 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      for (const userId of Object.keys(ratings || {})) {
+      // Mark ALL members as completed (rated members already got completedAt above).
+      // badges.ts counts every closed-project membership, so persistence must match.
+      await tx.projectMember.updateMany({
+        where: { projectId, completedAt: null },
+        data: { completedAt: new Date() },
+      });
+
+      for (const userId of contributorIds) {
         const member = await tx.user.findUnique({
           where: { id: userId },
           select: {
@@ -159,12 +166,14 @@ export async function POST(request: NextRequest) {
           role: member.role,
           applications: member.applications,
           projectCreated: member.projectCreated,
-          projectsParticipated: member.projectsParticipated,
+          projectsParticipated: member.projectsParticipated as {
+            project: { status: string; difficultyTag: any; requirementTags: string[] };
+          }[],
           messageCount: member._count.sentMessages,
           assignedSubtaskCount: member._count.assignedSubtasks,
           memberScores: member.projectsParticipated
-            .map((p) => p.score)
-            .filter((score): score is number => score !== null),
+            .map((p: { score: number | null }) => p.score)
+            .filter((score: number | null): score is number => score !== null),
           isRankOne: false,
         });
 

@@ -163,7 +163,7 @@ export async function PUT(request: NextRequest) {
     // --- Authorization: caller must be project author or ADMIN ---
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      select: { authorId: true },
+      select: { authorId: true, status: true },
     });
 
     if (!project) {
@@ -191,6 +191,10 @@ export async function PUT(request: NextRequest) {
 
       console.log("Current application status:", application.status);
 
+      if (application.project.status === 'CLOSED') {
+        throw new Error("PROJECT_CLOSED");
+      }
+
       if (application.status !== 'PENDING') {
         console.log("Application is not pending. Current status:", application.status);
         throw new Error("Application is not in pending state");
@@ -211,7 +215,7 @@ export async function PUT(request: NextRequest) {
         console.log("Adding user to project members...");
 
         const selectionUpdate = await tx.project.updateMany({
-          where: { id: projectId, selectionCapacity: { gt: 0 } },
+          where: { id: projectId, selectionCapacity: { gt: 0 }, status: { not: 'CLOSED' } },
           data: { selectionCapacity: { decrement: 1 } },
         });
         if (selectionUpdate.count === 0) throw new Error("NO_SELECTION_CAPACITY");
@@ -234,6 +238,7 @@ export async function PUT(request: NextRequest) {
 
   } catch (error) {
     if (error instanceof Error && error.message === 'NO_SELECTION_CAPACITY') return NextResponse.json({ error: 'Project has no remaining selection capacity' }, { status: 409 });
+    if (error instanceof Error && error.message === 'PROJECT_CLOSED') return NextResponse.json({ error: 'Project is closed' }, { status: 409 });
     console.error('Error processing application:', error);
     return NextResponse.json(
       { error: 'Internal server error occurred while processing application' },

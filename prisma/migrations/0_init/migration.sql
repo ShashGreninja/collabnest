@@ -1,0 +1,155 @@
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('USER', 'PROFESSOR', 'ADMIN');
+
+-- CreateEnum
+CREATE TYPE "Status" AS ENUM ('OPEN', 'CLOSED', 'IN_PROGRESS');
+
+-- CreateEnum
+CREATE TYPE "DifficultyTag" AS ENUM ('BEGINNER', 'INTERMEDIATE', 'ADVANCED');
+
+-- CreateEnum
+CREATE TYPE "ApplicationStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REJECTED');
+
+-- CreateTable
+CREATE TABLE "User" (
+    "id" UUID NOT NULL,
+    "username" TEXT,
+    "name" TEXT NOT NULL,
+    "roll" TEXT,
+    "email" TEXT NOT NULL,
+    "password" TEXT,
+    "role" "Role" NOT NULL DEFAULT 'USER',
+    "rating" INTEGER NOT NULL DEFAULT 0,
+    "degree" TEXT,
+    "year" TEXT,
+    "branch" TEXT,
+    "department" TEXT NOT NULL,
+    "picture" TEXT,
+    "accountCreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "passwordChangedAt" TIMESTAMP(3),
+    "passwordResetToken" TEXT,
+    "passwordResetTokenExpiry" TIMESTAMP(3),
+    "cv" TEXT,
+    "accountUpdatedAt" TIMESTAMP(3),
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Project" (
+    "id" UUID NOT NULL,
+    "authorId" UUID NOT NULL,
+    "title" TEXT NOT NULL,
+    "subheading" TEXT,
+    "description" TEXT,
+    "status" "Status" NOT NULL DEFAULT 'OPEN',
+    "deadlineToApply" TIMESTAMP(3),
+    "deadlineToComplete" TIMESTAMP(3),
+    "difficultyTag" "DifficultyTag" NOT NULL,
+    "applicantCapacity" INTEGER NOT NULL DEFAULT 100,
+    "selectionCapacity" INTEGER NOT NULL DEFAULT 10,
+    "requirementTags" TEXT[],
+    "projectResources" JSONB[],
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Project_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Subtask" (
+    "id" UUID NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "status" "Status" NOT NULL DEFAULT 'OPEN',
+    "deadline" TIMESTAMP(3),
+    "projectId" UUID NOT NULL,
+    "assigneeId" UUID,
+
+    CONSTRAINT "Subtask_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Application" (
+    "id" UUID NOT NULL,
+    "projectId" UUID NOT NULL,
+    "applicantId" UUID NOT NULL,
+    "dateOfApplication" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "status" "ApplicationStatus" NOT NULL DEFAULT 'PENDING',
+
+    CONSTRAINT "Application_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProjectMember" (
+    "id" UUID NOT NULL,
+    "projectId" UUID NOT NULL,
+    "userId" UUID NOT NULL,
+    "score" INTEGER,
+    "completedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ProjectMember_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "UserBadge" (
+    "id" UUID NOT NULL,
+    "userId" UUID NOT NULL,
+    "badgeKey" TEXT NOT NULL,
+    "awardedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "UserBadge_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Message" (
+    "id" UUID NOT NULL,
+    "senderId" UUID NOT NULL,
+    "projectId" UUID NOT NULL,
+    "content" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_roll_key" ON "User"("roll");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserBadge_userId_badgeKey_key" ON "UserBadge"("userId", "badgeKey");
+
+-- AddForeignKey
+ALTER TABLE "Project" ADD CONSTRAINT "Project_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Subtask" ADD CONSTRAINT "Subtask_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Subtask" ADD CONSTRAINT "Subtask_assigneeId_fkey" FOREIGN KEY ("assigneeId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Application" ADD CONSTRAINT "Application_applicantId_fkey" FOREIGN KEY ("applicantId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Application" ADD CONSTRAINT "Application_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProjectMember" ADD CONSTRAINT "ProjectMember_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProjectMember" ADD CONSTRAINT "ProjectMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserBadge" ADD CONSTRAINT "UserBadge_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Message" ADD CONSTRAINT "Message_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Message" ADD CONSTRAINT "Message_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

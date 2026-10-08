@@ -1,19 +1,29 @@
 import { NextResponse, NextRequest } from 'next/server';
 
 import { prisma } from '@/lib/prisma';
+import { canAccessProject, getAuthenticatedUser, getOwnedProject, publicUserSelect } from '@/lib/auth';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const { id } = await params;
     if (!id) {
       return NextResponse.json({ error: "Project ID is required" }, { status: 400 });
     }
 
-    // Fetch Project Members directly from the database
+    // Only project author, members, or admins may see the member list
+    if (!(await canAccessProject(authUser, id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Fetch Project Members directly from the database (safe user fields only)
     const projectMembers = await prisma.projectMember.findMany({
       where: { projectId: id },
       include: {
-        user: true,
+        user: { select: { ...publicUserSelect, email: true } },
         project: true,
       },
     });
@@ -28,6 +38,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const { id } = await params;
     if (!id) {
@@ -41,15 +55,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 });
     }
-    
-    // Check if user and project exist
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    const project = await prisma.project.findUnique({ where: { id } });
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+
+    // Only the project author or an admin may remove members
+    const project = await getOwnedProject(authUser, id);
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      return NextResponse.json({ error: "Project not found or forbidden" }, { status: 403 });
+    }
+    if (project.status === "CLOSED") {
+      return NextResponse.json({ error: "Project is closed" }, { status: 409 });
     }
 
     // search user in project members

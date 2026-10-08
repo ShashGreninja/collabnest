@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import path from 'path';
 import fs from 'fs';
 import { sendMail } from '@/lib/sendMail.server.ts';
+import { getAuthenticatedUser, getOwnedProject } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
@@ -76,21 +77,46 @@ async function generateCertificate(user: any, projectId: string) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { projectId } = await params;
 
     try {
-        const projectMember = await prisma.projectMember.findFirst({
-            where: { projectId },
-            include: { user: true },
-        });
-
-        if (!projectMember) {
-            return NextResponse.json({ error: 'No project members found' }, { status: 404 });
+        // Only the project author or an admin may issue certificates
+        const project = await getOwnedProject(authUser, projectId);
+        if (!project) {
+            return NextResponse.json({ error: 'Project not found or forbidden' }, { status: 403 });
+        }
+        if (project.status !== 'CLOSED') {
+            return NextResponse.json({ error: 'Certificates can only be issued for closed projects' }, { status: 409 });
         }
 
-        await generateCertificate(projectMember.user, projectId);
+        // Only members who actually completed the project
+        const members = await prisma.projectMember.findMany({
+            where: { projectId, completedAt: { not: null } },
+            include: { user: { select: { id: true, name: true, email: true } } },
+        });
 
-        return NextResponse.json({ success: true });
+        if (members.length === 0) {
+            return NextResponse.json({ error: 'No completed project members found' }, { status: 404 });
+        }
+
+        const certDir = path.join(process.cwd(), 'public', 'certificates');
+        if (!fs.existsSync(certDir)) fs.mkdirSync(certDir, { recursive: true });
+
+        let sent = 0;
+        let skipped = 0;
+        for (const member of members) {
+            // Idempotency: never re-send a certificate that was already issued
+            const existing = path.join(certDir, `${projectId}-${member.user.id}-certificate.png`);
+            if (fs.existsSync(existing)) { skipped++; continue; }
+            await generateCertificate(member.user, projectId);
+            sent++;
+        }
+
+        return NextResponse.json({ success: true, sent, skipped });
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Failed to generate certificates' }, { status: 500 });

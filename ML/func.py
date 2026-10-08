@@ -4,12 +4,13 @@ from collections import Counter
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import requests
+import os
 
 def fetch_ml_data():
     url = "https://collabnest.iitp.ac.in/api/fetchMLdata"
     
     try:
-        response = requests.get(url)
+        response = requests.get(url, headers={"x-ml-api-key": os.environ.get("ML_API_KEY", "")})
         response.raise_for_status()  # Raise an error for HTTP errors (4xx, 5xx)
         
         data = response.json()  # Parse the JSON response

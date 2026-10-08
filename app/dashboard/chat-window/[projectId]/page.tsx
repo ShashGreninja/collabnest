@@ -39,19 +39,7 @@ export default function ChatWindowPage() {
   const params = useParams();
   const projectId = params.projectId as string;
 
-  const [userInitialsMap, setUserInitialsMap] = useState<Record<string, any>>({});
 
-  const fetchUserInitials = async (senderId: string) => {
-    if (userInitialsMap[senderId]) return;
-    try {
-      const response = await fetch(`/api/forProfile/nameByUserId/${senderId}`);
-      if (!response.ok) throw new Error("Failed to fetch user name");
-      const data = await response.json();
-      setUserInitialsMap((prev) => ({ ...prev, [senderId]: data }));
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
   // Keep context-based project as fallback when navigating from dashboard
   const { currentProject, setCurrentProject } = useProject();
@@ -169,14 +157,7 @@ export default function ChatWindowPage() {
     }
   }, [messages, shouldAutoScroll]);
 
-  useEffect(() => {
-    const fetchInitialsForMessages = async () => {
-      for (const message of messages) {
-        await fetchUserInitials(message.senderId);
-      }
-    };
-    fetchInitialsForMessages();
-  }, [messages]);
+
 
   // 3) Send new message
   const handleSendMessage = async () => {
@@ -193,23 +174,7 @@ export default function ChatWindowPage() {
       });
       if (!res.ok) throw new Error("Failed to send message");
 
-      // Keep the sender the API returned instead of blanking it, and seed the
-      // initials map from it so this message needs no extra name lookup.
       const createdMessage: Message = await res.json();
-      const senderName = createdMessage.sender?.name;
-      if (senderName) {
-        setUserInitialsMap((prev) =>
-          prev[createdMessage.senderId]
-            ? prev
-            : {
-                ...prev,
-                [createdMessage.senderId]: {
-                  name: senderName,
-                  initial: initialsFromName(senderName),
-                },
-              }
-        );
-      }
 
       setMessages((prev) => [...prev, createdMessage]);
       setNewMessage("");
@@ -281,8 +246,8 @@ export default function ChatWindowPage() {
             <div className="space-y-4 p-4">
               {messages.map((msg) => {
                 const isCurrentUser = msg.senderId === currentUserId;
-                const userInitials = userInitialsMap[msg.senderId]?.initial || "??";
-                const userName = userInitialsMap[msg.senderId]?.name || "Unknown User";
+                const userName = msg.sender?.name || "Unknown User";
+                const userInitials = msg.sender?.name ? initialsFromName(msg.sender.name) : "??";
 
                 return (
                   <div

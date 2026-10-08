@@ -21,7 +21,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     where: { projectId },
     include: { sender: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
-    take: 4,
+    take: 50,
   });
   return NextResponse.json(messages.reverse());
 }
