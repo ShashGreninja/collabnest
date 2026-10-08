@@ -6,7 +6,7 @@ def fetch_ml_data():
     url = "http://localhost:3000/api/fetchMLdata"
     
     try:
-        response = requests.get(url)
+        response = requests.get(url, headers={"x-ml-api-key": os.environ.get("ML_API_KEY", "")})
         response.raise_for_status()  # Raise an error for HTTP errors (4xx, 5xx)
         
         data = response.json()  # Parse the JSON response

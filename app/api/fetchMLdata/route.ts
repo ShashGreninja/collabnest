@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { timingSafeEqual } from 'crypto';
+import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUser, isAdmin } from '@/lib/auth';
 
 // Helper function to map difficulty to numerical values
 const mapDifficulty = (difficulty: string) => {
@@ -11,6 +11,17 @@ const mapDifficulty = (difficulty: string) => {
 };
 
 export async function GET(req: NextRequest) {
+    // Machine-to-machine endpoint: require x-ml-api-key === ML_API_KEY, or an admin session.
+    const expectedKey = process.env.ML_API_KEY;
+    const providedKey = req.headers.get('x-ml-api-key');
+    const keyOk = !!expectedKey && !!providedKey && providedKey.length === expectedKey.length
+        && timingSafeEqual(Buffer.from(providedKey), Buffer.from(expectedKey));
+    if (!keyOk) {
+        const authUser = await getAuthenticatedUser();
+        if (!isAdmin(authUser)) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+    }
     try {
         console.log('Connecting to database...');
         const Users = await prisma.user.findMany({

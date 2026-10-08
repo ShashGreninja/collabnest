@@ -3,6 +3,9 @@ import { NextRequest,NextResponse } from 'next/server';
 import { Project } from '@/types/leaderboard.ts';
 
 import { prisma } from '@/lib/prisma.ts'; // Use a singleton Prisma instance
+import { canAccessProject, getAuthenticatedUser, getOwnedProject, publicUserSelect } from '@/lib/auth';
+
+const memberUserSelect = { ...publicUserSelect, email: true } as const;
 
 export const getUserProjectsById = async ({ params }: { params: { id: string } }) => {
     const { id } = params;
@@ -12,14 +15,14 @@ export const getUserProjectsById = async ({ params }: { params: { id: string } }
             include: {
                 projectsParticipated: {
                     include: {
-                        user: true,
+                        user: { select: { id: true } },
                         project: {
                             include: {
                                 subtasks: true,
-                                author: true,
+                                author: { select: memberUserSelect },
                                 members: {
                                     include: {
-                                        user: true,
+                                        user: { select: memberUserSelect },
                                     },
                                 },
                             },
@@ -49,15 +52,17 @@ export const getUserProjectsById = async ({ params }: { params: { id: string } }
 
 
 export const updateUserProjects = async (req: NextRequest) => {
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     try {
         // Extract project ID from params
         // Parse JSON body
         const { id, title, description, requirementTags, deadline } = await req.json();
 
-        // Check if project exists
-        const existingProject = await prisma.project.findUnique({ where: { id } });
+        // Check if project exists and caller is author/admin
+        const existingProject = await getOwnedProject(authUser, id);
         if (!existingProject) {
-            return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+            return NextResponse.json({ error: 'Project not found or forbidden' }, { status: 403 });
         }
 
         // Update project
@@ -81,6 +86,8 @@ export const updateUserProjects = async (req: NextRequest) => {
 };
 
 export const updateProjectResources = async(req:NextRequest)=>{
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     try {
     const { resources, projectId } = await req.json();
     
@@ -90,6 +97,10 @@ export const updateProjectResources = async(req:NextRequest)=>{
         { message: "Project ID and resources are required" }, 
         { status: 400 }
       );
+    }
+
+    if (!(await getOwnedProject(authUser, projectId))) {
+      return NextResponse.json({ message: 'Project not found or forbidden' }, { status: 403 });
     }
 
     
@@ -119,11 +130,21 @@ interface Task {
   description: string;
   status: string;
   deadline?: string | null;
+  assigneeId?: string | null;
 }
 
 export const updateSubtasks = async (request: NextRequest) => {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { projectId, tasks } = await request.json();
+    if (!projectId || !Array.isArray(tasks)) {
+      return NextResponse.json({ error: 'projectId and tasks[] are required' }, { status: 400 });
+    }
+    // Author, admin, or project members may manage tasks
+    if (!(await canAccessProject(authUser, projectId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     console.log("Received tasks:", tasks);
 
     // Get existing tasks for this project
@@ -160,6 +181,7 @@ export const updateSubtasks = async (request: NextRequest) => {
             description: task.description,
             status: task.status,
             deadline: task.deadline ? new Date(task.deadline).toISOString() : null,
+            assigneeId: task.assigneeId || null,
           },
         });
       } else {
@@ -170,6 +192,7 @@ export const updateSubtasks = async (request: NextRequest) => {
             description: task.description,
             status: task.status,
             deadline: task.deadline ? new Date(task.deadline).toISOString() : null,
+            assigneeId: task.assigneeId || null,
             projectId,
           },
         });

@@ -1,18 +1,25 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUser, isAdmin } from '@/lib/auth';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const { id } = await params;
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
+
+    // Full application details only for the user themselves or an admin;
+    // everyone else just sees how many applications exist.
+    const isSelf = authUser.id === id || isAdmin(authUser);
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -27,13 +34,15 @@ export async function GET(
         degree: true,
         rating: true,
         picture: true,
-        applications: true,
+        applications: isSelf ? true : { select: { id: true } },
         projectCreated: true,
         projectsParticipated: {
           include:{
             project:true
           }
-        }// Add more attributes as needed
+        },
+        badges: { select: { badgeKey: true, awardedAt: true } },
+        _count: { select: { sentMessages: true, assignedSubtasks: true } }// Add more attributes as needed
       },
     });
 

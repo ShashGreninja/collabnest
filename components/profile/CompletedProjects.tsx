@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye } from "lucide-react";
-import { Loader } from "./Loader";
 
 interface Project {
   id: string;
@@ -42,10 +41,20 @@ export const CompletedProjects = ({ id }: { id: string }) => {
 
   if (loading)
     return (
-      <Card className='mb-6'>
-        <div className='flex items-center justify-center h-32'>
-          <Loader center text='Loading Completed Projects...' />
-        </div>
+      <Card className='mb-6' aria-busy='true' aria-label='Loading completed projects'>
+        <CardHeader><CardTitle>Completed Projects</CardTitle></CardHeader>
+        <CardContent className='space-y-5'>
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div key={index} className='flex justify-between gap-4 py-3 animate-pulse'>
+              <div className='flex-1 space-y-3'>
+                <div className='h-5 w-2/3 rounded bg-muted' />
+                <div className='h-4 w-full rounded bg-muted' />
+                <div className='h-4 w-1/3 rounded bg-muted' />
+              </div>
+              <div className='h-8 w-20 rounded bg-muted' />
+            </div>
+          ))}
+        </CardContent>
       </Card>
     );
   if (error) return <p className='text-red-500'>{error}</p>;

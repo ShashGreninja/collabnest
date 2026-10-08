@@ -10,7 +10,6 @@ import {
   QrCode,
   University,
 } from "lucide-react";
-import { Loader } from "./Loader";
 
 export const UserDetails = ({ id }: { id: string }) => {
   const [userData, setUserData] = useState<any>(null);
@@ -38,13 +37,21 @@ export const UserDetails = ({ id }: { id: string }) => {
 
   if (loading)
     return (
-      <Card className='mb-6'>
+      <Card className='mb-6' aria-busy='true' aria-label='Loading personal information'>
         <CardHeader>
           <CardTitle>Personal Information</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className='flex items-center justify-center h-32'>
-            <Loader center text='Loading user information...' />
+          <div className='grid xl:grid-cols-2 gap-4'>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className='flex items-center space-x-3 animate-pulse'>
+                <div className='h-5 w-5 min-w-5 rounded bg-muted' />
+                <div className='flex-1 space-y-2'>
+                  <div className='h-3 w-16 rounded bg-muted' />
+                  <div className='h-4 w-3/4 rounded bg-muted' />
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

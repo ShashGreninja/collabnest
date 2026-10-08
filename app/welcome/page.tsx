@@ -19,6 +19,7 @@ function SearchParamComponent() {
 
 export default function LandingPage() {
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const { data: session, status } = useSession();
     console.log('Session -----------> ', session);
@@ -32,22 +33,31 @@ export default function LandingPage() {
     //   }
 
     useEffect(() => {
-        // When user is authenticated, create or check user in the database
+        // When user is authenticated, create or check user in the database.
+        // Identity is read from the session server-side; no body is sent.
+        // Only redirect when /api/addUser reports success — otherwise
+        // retry once and surface the error instead of redirecting.
         const createUserIfNeeded = async () => {
             if (status === 'authenticated' && session?.user?.name && session?.user?.email) {
                 setIsLoading(true);
+                setError(null);
                 try {
                     // Call your API to create the user (will handle existing emails)
-                    const response = await fetch('/api/addUser', {
+                    let response = await fetch('/api/addUser', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            name: session.user.name,
-                            email: session.user.email,
-                        }),
                     });
+
+                    if (!response.ok) {
+                        await new Promise((r) => setTimeout(r, 500));
+                        response = await fetch('/api/addUser', {
+                            method: 'POST',
+                        });
+                    }
+
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => null);
+                        throw new Error(errData?.error || `User creation failed (${response.status})`);
+                    }
 
                     const data = await response.json();
                     console.log('User creation response:', data);
@@ -56,14 +66,22 @@ export default function LandingPage() {
                     window.location.href = '/dashboard';
                 } catch (error) {
                     console.error('Error creating user:', error);
+                    setError(error instanceof Error ? error.message : 'Failed to create user. Please retry.');
                     setIsLoading(false);
-                    // You might want to handle this error differently
                 }
             }
         };
 
         createUserIfNeeded();
     }, [status, session]);
+
+    const handleRetry = () => {
+        setError(null);
+        setIsLoading(false);
+        // Re-trigger creation by reloading session state path:
+        // simplest is to re-run via a manual fetch identical to the effect.
+        window.location.reload();
+    };
 
     const handleSignIn = () => {
         setIsLoading(true);
@@ -120,6 +138,17 @@ export default function LandingPage() {
                         <Suspense>
                             <SearchParamComponent />
                         </Suspense>
+                        {error && (
+                            <div className="mt-4 text-center">
+                                <p className="text-sm text-red-600">❌ {error}</p>
+                                <button
+                                    className="mt-2 text-sm text-blue-600 hover:underline"
+                                    onClick={handleRetry}
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        )}
                     </div>
                     {/* Terms of Service */}
                     <div className="mt-4 md:mt-6 text-center text-sm text-gray-500">

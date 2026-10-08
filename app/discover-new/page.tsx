@@ -25,7 +25,6 @@ import { FaStar } from "react-icons/fa";
 import { Calendar } from "lucide-react";
 import Loader from "@/components/Loader";
 import { useSession } from "next-auth/react";
-import { User } from "@/types/leaderboard";
 import { useIsClient } from "../context/isClientContext";
 
 const Discovery = () => {
@@ -55,54 +54,40 @@ const Discovery = () => {
     id: string;
     projectId: string;
     applicantId: string;
+    status: "PENDING" | "ACCEPTED" | "REJECTED";
   }
 
   const [allProjects, setAllProjects] = useState<Project[]>([]); // Stores all fetched projects
   const [projects, setProjects] = useState<Project[]>([]); // Stores filtered projects
   const [loading, setLoading] = useState<boolean>(true); // Loader state
-  const [role , setRole] = useState<string | null>(null);
   const [recommendedProjectIds, setRecommendedProjectIds] = useState<string[]>([]);
   const { data: session, status } = useSession();
   const isClient = useIsClient();
-  console.log(status);
-  if (isClient && status != "authenticated") {
-    window.location.href = "/welcome";
-  }
-  const [userId, setId] = useState<string | null>(null);
 
+  // Role/id come straight from the NextAuth session (lib/authOptions jwt/session
+  // callbacks) — same as app/discover/page.tsx, no /byEmail fetch race.
+  const role = session?.user?.role ?? null;
+  const userId = session?.user?.id ?? null;
 
-  
-  const email = session?.user?.email || "";
-
-  const fetchid = async () => {
-    try {
-      const response = await fetch(
-        `/api/forProfile/byEmail/${session?.user?.email}`
-      );
-      const data: User = await response.json();
-      setRole(data.role);
-      setId(data.id);
-      // Return the ID for proper sequencing
-    } catch (err) {
-      console.error(err);
-      return null;
-    }
-  };
   useEffect(() => {
-    fetchid();
-    console.log(userId);
-  }, [email]);
+    if (isClient && status === "unauthenticated") {
+      window.location.href = "/welcome";
+    }
+  }, [isClient, status]);
+
   const router = useRouter();
 
   useEffect(() => {
-    if (role === null) return; // Wait until role is fetched
+    if (status !== "authenticated") return;
+    if (role === null) return; // Wait until session role is available
     if (role !== "USER") {
       router.push("/discover");
     }
-  }, [role, router]);
+  }, [status, role, router]);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (status !== "authenticated") return;
       setLoading(true);
       try {
         // Fetch recommended project IDs
@@ -115,15 +100,38 @@ const Discovery = () => {
           return;
         }
         console.log(userId);
-        const recRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/recommend/${userId}`);
-        const recData = await recRes.json();
-        const recommendedIds = recData.data || [];
-        console.log(recommendedIds);
-
-        // Fetch all projects
+        // Fetch all projects first (required)
         const projRes = await fetch("/api/projects/All_Project");
+        if (!projRes.ok) throw new Error(`All_Project ${projRes.status}`);
         const projData = await projRes.json();
-        setAllProjects(projData);
+        if (!Array.isArray(projData)) throw new Error("All_Project non-array");
+
+        // Recommend is optional — ML backend may be unset or down.
+        // Never let it throw JSON.parse on HTML; fall back to unranked list.
+        let recommendedIds: string[] = [];
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        if (backendUrl) {
+          try {
+            const recRes = await fetch(`${backendUrl}/recommend/${userId}`);
+            if (!recRes.ok) throw new Error(`recommend ${recRes.status}`);
+            const contentType = recRes.headers.get("content-type") ?? "";
+            if (!contentType.includes("application/json")) {
+              throw new Error("recommend non-JSON response");
+            }
+            const recData = await recRes.json();
+            if (Array.isArray(recData?.data)) recommendedIds = recData.data;
+          } catch (recErr) {
+            console.warn(
+              "Recommend unavailable, showing all projects:",
+              recErr
+            );
+          }
+        } else {
+          console.warn(
+            "NEXT_PUBLIC_BACKEND_URL unset, showing all projects without recommendations"
+          );
+        }
+        console.log(recommendedIds);
 
         // Separate top 3 recommended projects
         const topRecommended = projData.filter((project: Project) =>
@@ -155,7 +163,7 @@ const Discovery = () => {
     };
 
     fetchData();
-  }, [userId]);
+  }, [userId, role, status]);
 
   const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(
     null
@@ -311,6 +319,17 @@ const Discovery = () => {
     }
   }
 
+  // BUG FIX 2.1: Check if application deadline has passed
+  function isDeadlinePassed(project: Project): boolean {
+    if (!project.deadlineToApply) return false;
+    return new Date() > new Date(project.deadlineToApply);
+  }
+
+  // BUG FIX 2.2: Check if applicant slots are full
+  function isCapacityFull(project: Project): boolean {
+    return project.applications.filter((application) => application.status !== "REJECTED").length >= project.applicantCapacity;
+  }
+
   async function fetchUpdatedProjects() {
     setLoading(true); // Start loading
     try {
@@ -319,7 +338,9 @@ const Discovery = () => {
       // setAllProjects(data); // Keep all projects updated
       // setProjects(data); // Update the filtered projects
       const projRes = await fetch("/api/projects/All_Project");
+      if (!projRes.ok) throw new Error(`All_Project ${projRes.status}`);
       const projData = await projRes.json();
+      if (!Array.isArray(projData)) throw new Error("All_Project non-array");
 
 
       // Separate top 3 recommended projects
@@ -347,7 +368,7 @@ const Discovery = () => {
     }
   }
 
- 
+
 
   const handleStarClick = (
     event: React.MouseEvent<HTMLButtonElement, MouseEvent>,
@@ -552,6 +573,24 @@ const Discovery = () => {
                         }}
                       >
                         Withdraw
+                      </Button>
+                    ) : isDeadlinePassed(project) ? (
+                      <Button
+                        variant="outline"
+                        className="bg-gray-400 text-white cursor-not-allowed"
+                        disabled
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Deadline Passed
+                      </Button>
+                    ) : isCapacityFull(project) ? (
+                      <Button
+                        variant="outline"
+                        className="bg-gray-400 text-white cursor-not-allowed"
+                        disabled
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        Applications Full
                       </Button>
                     ) : (
                       <Button

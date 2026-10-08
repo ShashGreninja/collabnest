@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, Star, BookOpen, Target } from "lucide-react";
 import { Project, ProjectMember } from "@/types/leaderboard";
-import { Loader } from "./Loader";
 
 export const ProfileStats = ({ id }: { id: string }) => {
   const [userData, setUserData] = useState<any>(null);
@@ -94,11 +93,18 @@ export const ProfileStats = ({ id }: { id: string }) => {
 
   if (loading)
     return (
-      <div className='flex items-center justify-center h-40'>
-        <Loader center text='Loading statistics...' />
+      <div className='grid grid-cols-2 md:grid-cols-3 gap-4 mb-6' aria-busy='true' aria-label='Loading profile statistics'>
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Card key={index}>
+            <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+              <div className='h-4 w-28 rounded bg-muted animate-pulse' />
+              <div className='h-4 w-4 rounded bg-muted animate-pulse' />
+            </CardHeader>
+            <CardContent><div className='h-8 w-16 rounded bg-muted animate-pulse' /></CardContent>
+          </Card>
+        ))}
       </div>
     );
-
   if (error) {
     return <div className='text-center py-10 text-red-500'>{error}</div>;
   }

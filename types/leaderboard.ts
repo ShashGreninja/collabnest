@@ -21,6 +21,7 @@ export interface Subtask {
     status      :Status    
     deadline    :string
     projectId   :string    
+    assigneeId  :string | null
     project     :Project   
 }
 
@@ -83,6 +84,8 @@ export interface ProjectMember {
   id    : string
   projectId :string
   userId :  string
+  score    : number | null
+  completedAt : string | null
   project :  Project
   user     : User
 }

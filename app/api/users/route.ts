@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
+import { getAuthenticatedUser, publicUserSelect } from "@/lib/auth";
 
 export async function GET() {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
-    const users = await prisma.user.findMany();
+    // Only safe public fields — never password / reset tokens / cv.
+    const users = await prisma.user.findMany({ select: publicUserSelect });
     return NextResponse.json(users);
   } catch (error) {
     console.error("Database error:", error);

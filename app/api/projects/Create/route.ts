@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAuthenticatedUser } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
+  const authUser = await getAuthenticatedUser();
+  if (!authUser) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
   try {
     // Attempt to parse JSON
     let jsonBody;
@@ -24,8 +29,9 @@ export async function POST(req: NextRequest) {
     applicantCapacity,
     selectionCapacity,
     subheading,subtasks,
-    authorId,
     } = jsonBody;
+    // Never trust a client-supplied authorId — always use the session user.
+    const authorId = authUser.id;
 
     console.log(jsonBody);
     // Validate required fields (remove 'author' from validation)
